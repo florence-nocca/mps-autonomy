@@ -8,6 +8,11 @@ library(dplyr)
 library(multidplyr)
 library(purrr)
 library(stringr)
+library(graphics) # For dendogram
+library(ape) # For dendogram
+
+## Use exact values instead of scientific notations
+options(scipen=999)
 
 ## --- The code below needs only to be executed once ---
 
@@ -16,13 +21,22 @@ library(stringr)
 ## file = read.csv("tweets/french_cand.tweets.csv", header=TRUE)
 ## sample = file[sample(1:nrow(file), 1000,
 ##    replace=FALSE),]
-## write.csv(tweets/sample, "sample.csv")
+## write.csv(sample, "tweets/sample.csv")
+
+## Comment to work with full datafile
+## tweets = readtext("tweets/sample.csv", textfield = "text")
+
+## --- Remove wrongly assigned accounts and replace with correct ones ---
+## tweets = read.csv("tweets/french_cand.tweets.csv", header = TRUE)
+## ilecallennec = read.csv("tweets/ilecallennec.tweets.csv", header = TRUE)
+## tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
+
+## tweets = rbind(tweets,ilecallennec)
+## tweets = unique(tweets)
+## write.csv(tweets, "tweets/all_french_cand.tweets.csv")
 
 ## --- Exploring and subsetting datafile ---
-tweets = readtext("tweets/sample.csv", text_field = "text")
-
-## Uncomment to work with full datafile
-## tweets = readtext("tweets/french_cand.tweets.csv", text_field = "text")
+tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
 
 ## Countries in the dataset
 unique(tweets$country)
@@ -45,8 +59,24 @@ campaign_timeline = as.Date(campaign_tweets$created_at)
 barplot(table(sort(weekdays(campaign_timeline))))
 ## By month
 barplot(table(months(campaign_timeline)))
+
 ## During the whole period
-barplot(table(campaign_timeline), las = 2, ylab = "Nombre de tweets", main = "Distribution des tweets durant la campagne", cex.main = 1.5)
+## Create a vector containing all days included in the campaign
+campaign_days = seq(as.Date("2017/3/1"), as.Date("2017/6/18"), "days")
+
+## Create a table of number of tweets per day and remove one per cell (as campaign_days artificially adds one tweet per cell)
+tw_per_days = table(c(campaign_days,campaign_timeline)) - 1
+
+barplot(tw_per_days, las = 2, ylab = "Nombre de tweets", main = "Distribution des tweets durant la campagne", cex.main = 1.5, xaxt="n")
+labs = substr((campaign_days),6,10)
+axis(1, at =(1:length(labs) * 1.2 - 0.5), labels=labs, las=2)
+
+## Explore peaks
+start_date = "2017-04-04 00:00:00"
+end_date = "2017-04-05 00:00:00"
+
+sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
+sample(sub_tweets$text,15)
 
 ## Keep only candidates' names and tweets and create one document per candidate
 cand_tweets = data.frame(name = campaign_tweets$screen_name, text = campaign_tweets$text)
@@ -62,7 +92,7 @@ write.csv(cand_tweets, "tweets/cand_campaign_tweets.csv")
 ## --- The code above needs only to be executed once ---
 
 ## --- Preparing text for analysis ---
-cand_tweets = readtext("tweets/cand_campaign_tweets.csv", text_field = "text")
+cand_tweets = readtext("tweets/cand_campaign_tweets.csv", textfield = "text")
 
 ## Create a quanteda corpus
 twCorpus = corpus(cand_tweets)
@@ -92,25 +122,29 @@ twCorpus$documents$texts = gsub(" +", " ", twCorpus$documents$texts) ## in the m
 twCorpus$documents$texts = gsub("^ +| +$", "", twCorpus$documents$texts) ## at both ends of the string
 
 ## --- Descriptive statistics on corpus
+
 ## Return the number of documents
 ndoc(twCorpus)           
 
-## How many tokens (total words) and features
+## How many tokens (total words)
 ntoken(twCorpus)
-nfeature(twdfm)
 
 ## Arguments to tokenize can be passed 
 ## ntoken(twCorpus, remove_punct = TRUE)
 
 ## How many types (unique words)
-ntype(twCorpus)
+ntype(tolower(twCorpus))
 
-## Extract feature labels and document names
-head(featnames(twdfm), 20)
-head(docnames(twdfm))
+## carpentierjn: only one tweet
+## Keep only documents with more than 40 types
+twCorpus = corpus_subset(twCorpus, ntype(tolower(twCorpus)) > 40)
+
+## Candidates that were removed
+removed = twCorpus$documents$name[ntype(tolower(twCorpus)) <= 40]
 
 ## Keywords in context
-kwic_hamon = kwic(twCorpus$documents$text, "hamon", window = 3)
+kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
+kwic_marché = kwic(tolower(twCorpus$documents$text), "marché", window = 3)
 
 ## --- Create a document-frequency matrix ---
 
@@ -119,10 +153,14 @@ my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
 
 twdfm = dfm(twCorpus, remove = c(stopwords("french"), "rt", my_stopwords), tolower = TRUE, remove_punct = TRUE, stem = TRUE, remove_twitter = TRUE, remove_numbers = TRUE)
 
+## Extract feature labels and document names
+head(featnames(twdfm), 20)
+head(docnames(twdfm))
+
 ## 100 most frequent features in the dfm
 top_feat = topfeatures(twdfm, n=100)
 ## Create a wordcloud with most frequent features
-## textplot_wordcloud(twdfm, max=100)
+textplot_wordcloud(twdfm, max=100)
 
 ## --- Diversity, readability and similarity measures ---
 ## Compute lexical diversity of texts on a dfm
@@ -133,9 +171,14 @@ dotchart(sort(textstat_lexdiv(twdfm, "R")))
 readab = textstat_readability(cand_tweets$text, 
                                measure = "Flesch.Kincaid")
 dotchart(sort(readab))
-
 ## Compute document similarities
-simil = as.list(textstat_simil(twdfm, margin = "documents", method = "cosine"))
+simil = as.matrix(textstat_simil(dfm_weight(twdfm, "relFreq")), margin = "documents", method = "cosine")
+
+## Mean of similarity of each candidate compared to the others
+simil_mean = unlist(lapply(1:ndoc(twCorpus),function(cand){
+mean(simil[,cand])
+}))
+
 ## Only on specified documents 
 ## as.list(textstat_simil(twdfm, c("cand_tweets.csv.292","cand_tweets.csv.291"), margin = "documents", method = "cosine"))
 
@@ -146,9 +189,20 @@ DistMat = dist(as.matrix(dfm_weight(twdfm, "relFreq")))
 ## Hierarchical clustering the distance object
 Cluster = hclust(DistMat)
 ## Label with document names
-Cluster$labels = docnames(twdfm)
+Cluster$labels = tolower(twCorpus$documents$name)
 ## plot as a dendrogram
-plot(Cluster)
+plot(as.dendrogram(Cluster), horiz = FALSE)
+
+pdf(file="Dendogram.pdf")
+plot(as.phylo(Cluster), type = "fan", cex = 0.5, no.margin=TRUE)
+dev.off()
+
+classes = cutree(Cluster, k=4)
+
+classes = lapply(1:k, function(n){
+    cand_tweets[classes == n,]$name
+})
+
 
 ## --- Term clustering ---
 ## Word dendrogram with tf-idf weighting
@@ -159,17 +213,18 @@ wordCluster = hclust(wordDistMat)
 plot(wordCluster, xlab="", main="tf-idf Frequency weighting")
 
 ## --- LDA model (topicmodels version) ---
+k = 4
 if (require(topicmodels)) {
-    myLDAfit = LDA(convert(twdfm, to = "topicmodels"), k = 4)
+    myLDAfit = LDA(convert(twdfm, to = "topicmodels"), k = k)
     get_terms(myLDAfit, 4)
     topics(myLDAfit, 4)
 }
 
 ## Cluster tweets according to the topics given by the LDA
-topic_1 = cand_tweets[topics(myLDAfit) == 1,]$text
-topic_2 = cand_tweets[topics(myLDAfit) == 2,]$text
-topic_3 = cand_tweets[topics(myLDAfit) == 3,]$text
-topic_4 = cand_tweets[topics(myLDAfit) == 4,]$text
+topics = lapply(1:k, function(n){
+    cand_tweets[topics(myLDAfit) == n,]$text
+})
+
 ## Warning: remember that cleaning was performed on the corpus, not on the cand_tweets datafile
 
 ## --- LDA model (quanteda version) ---
@@ -180,20 +235,28 @@ terms(lda, 10)
 
 ## --- k-means model ---
 ## Number of classes needed
-k = 4
+k = 5
 kc = kmeans(twdfm, k)
 
-## classes = unlist(lapply(1:k, function(n){
-## tweets[kc$cluster == n,]
-## }))
-
 ## Cluster candidates according to the classes given by the k-means
-class_1 = cand_tweets[kc$cluster == 1,]
-class_2 = cand_tweets[kc$cluster == 2,]
-class_3 = cand_tweets[kc$cluster == 3,]
-class_4 = cand_tweets[kc$cluster == 4,]
+classes = lapply(1:k, function(n){
+    unique(cand_tweets[kc$cluster == n,]$name)
+})
 
-cand_1 = unique(class_1$name)
-cand_2 = unique(class_2$name)
-cand_3 = unique(class_3$name)
-cand_4 = unique(class_4$name)
+
+## --- Retrieving candidates social and political characteristics ---
+require(readstata13)
+data = read.dta13("french_cand_data.dta")
+
+## Correct wrongly assigned account
+index = which(tolower(data$COMPTE) == "lecallennec")
+data$COMPTE[index] = "ilecallennec" 
+data$COMPTE = tolower(data$COMPTE)
+
+## Merge candidates database with mean similarity scores
+to_match = data.frame(account = tolower(twCorpus$documents$name), simil_mean = simil_mean)
+
+cand_data = merge(x=to_match, y=data, by.x='account', by.y='COMPTE')
+colnames(cand_data) = tolower(colnames(cand_data))
+
+write.csv(cand_data, "tweets/cand_data.csv")
