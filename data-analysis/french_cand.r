@@ -8,8 +8,8 @@ library(dplyr)
 library(multidplyr)
 library(purrr)
 library(stringr)
-library(graphics) # For dendogram
-library(ape) # For dendogram
+library(graphics) # For dendrogram
+library(ape) # For dendrogram
 
 ## Use exact values instead of scientific notations
 options(scipen=999)
@@ -229,7 +229,7 @@ Cluster$labels = tolower(twCorpus$documents$name)
 ## plot as a dendrogram
 plot(as.dendrogram(Cluster), horiz = FALSE)
 
-pdf(file="Dendogram.pdf")
+pdf(file="Dendrogram.pdf")
 plot(as.phylo(Cluster), type = "fan", cex = 0.5, no.margin=TRUE)
 dev.off()
 
