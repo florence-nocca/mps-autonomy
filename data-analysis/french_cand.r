@@ -42,6 +42,12 @@ tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
 unique(tweets$country)
 unique(tweets[tweets$country == "Taiwan",]$screen_name)
 
+## Language repartition in the dataset
+barplot(table(tweets$lang))
+## Top languages: fr, en, sp (und: undetermined, tweets containing urls or mentions only)
+## How many tweets not written in French
+length(unique(tweets[tweets$lang != "fr",]$text))
+
 ## Timeline
 timeline = as.Date(unique(tweets$created_at))
 boxplot(timeline)
@@ -78,6 +84,9 @@ end_date = "2017-04-05 00:00:00"
 sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
 sample(sub_tweets$text,15)
 
+## Keep only French tweets
+tweets = tweets[tweets$lang == "fr",]
+
 ## Keep only candidates' names and tweets and create one document per candidate
 cand_tweets = data.frame(name = campaign_tweets$screen_name, text = campaign_tweets$text)
 cand_tweets = cand_tweets %>% group_by(name) %>% nest() %>% collect()
@@ -100,6 +109,14 @@ twCorpus = corpus(cand_tweets)
 ## Remove urls
 twCorpus$documents$texts = gsub("ht(tps)?[^ ]+","",twCorpus$documents$texts)
 
+twCorpus$documents$texts = gsub("(m\\.)?youtube\\.[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Youtube URLs
+
+twCorpus$documents$texts = gsub("(pic\\.)?twitter[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Twitter URLs
+
+twCorpus$documents$texts = gsub("fb.me[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Facebook URLs
+
+twCorpus$documents$texts = gsub("[^ ]*\\.fr", "", twCorpus$documents$texts)
+
 ## Remove html entities
 twCorpus$documents$texts = gsub("&(gt|lt|amp|nbsp);","",twCorpus$documents$texts)
 
@@ -107,10 +124,26 @@ twCorpus$documents$texts = gsub("&(gt|lt|amp|nbsp);","",twCorpus$documents$texts
 ## twCorpus$documents$texts = gsub("@[^ ]+","",twCorpus$documents$texts)
 
 ## Remove retweet marker (RT)
-twCorpus$documents$texts = gsub("RT","",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub("RT "," ",twCorpus$documents$texts)
+## Remove address marker "cc"
+twCorpus$documents$texts = gsub(" cc "," ",twCorpus$documents$texts)
 
-## Remove non alphabetical characters and keep accented alpha characters
-twCorpus$documents$texts = gsub("[^a-zA-Z\u00C0-\u00FC]", " ", twCorpus$documents$texts)
+## Remove numeration marker "er" and "ème"
+twCorpus$documents$texts = gsub(" (er)|((è|e)me) "," ",twCorpus$documents$texts)
+
+## twCorpus$documents$texts = gsub("œ","oe",twCorpus$documents$texts)
+
+## Remove non alphabetical characters and keep accented alpha characters, -, _ and twitter characters
+twCorpus$documents$texts = gsub("[^-_a-zA-Z\u00C0-\u00FC@#œ]", " ", twCorpus$documents$texts)
+
+## Replace abbreviations by entire word
+twCorpus$documents$texts = gsub(" ds "," dans ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" jms "," jamais ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" fr "," france ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" pr "," pour ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" rf "," république française ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" (rdv)(rendez vous) "," rendez-vous ",twCorpus$documents$texts)
+twCorpus$documents$texts = gsub(" st( |-)"," saint-",twCorpus$documents$texts)
 
 ## Remove one-character words
 twCorpus$documents$texts = gsub("^. +"," ",twCorpus$documents$texts) ## at the beginning of the string
@@ -146,19 +179,22 @@ removed = twCorpus$documents$name[ntype(tolower(twCorpus)) <= 40]
 kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
 kwic_marché = kwic(tolower(twCorpus$documents$text), "marché", window = 3)
 
+View(kwic(tolower(twCorpus$documents$text), "trorisme", window = 3))
+
 ## --- Create a document-frequency matrix ---
 
 ## Add additional stopwords
 my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
+my_stopwords = c(my_stopwords, "faire", "faut", "veux","veut","oui","non")
 
-twdfm = dfm(twCorpus, remove = c(stopwords("french"), "rt", my_stopwords), tolower = TRUE, remove_punct = TRUE, stem = TRUE, remove_twitter = TRUE, remove_numbers = TRUE)
+twdfm = dfm(twCorpus, remove = c(stopwords("french"), stopwords("english"), my_stopwords), tolower = TRUE, remove_punct = TRUE, stem = FALSE, remove_twitter = TRUE, remove_numbers = TRUE)
 
 ## Extract feature labels and document names
-head(featnames(twdfm), 20)
+head(featnames(twdfm), 30)
 head(docnames(twdfm))
 
 ## 100 most frequent features in the dfm
-top_feat = topfeatures(twdfm, n=100)
+top_feat = topfeatures(twdfm, n=200)
 ## Create a wordcloud with most frequent features
 textplot_wordcloud(twdfm, max=100)
 
