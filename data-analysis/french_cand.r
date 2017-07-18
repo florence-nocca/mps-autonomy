@@ -16,24 +16,47 @@ options(scipen=999)
 
 ## --- The code below needs only to be executed once ---
 
+## ## --- Retrieving candidates social and political characteristics ---
+## require(readstata13)
+## data = read.dta13("french_cand_data.dta")
+
+## ## Correct wrongly assigned account
+## index = which(tolower(data$COMPTE) == "lecallennec")
+## data$COMPTE[index] = "ilecallennec" 
+## data$COMPTE = tolower(data$COMPTE)
+
+## ## Merge candidates database with mean similarity scores
+## to_match = data.frame(account = tolower(twCorpus$documents$name), simil_mean = simil_mean)
+
+## cand_data = merge(x=to_match, y=data, by.x='account', by.y='COMPTE')
+## colnames(cand_data) = tolower(colnames(cand_data))
+
+## write.csv(cand_data, "tweets/cand_data.csv")
+
 ## --- Generating a random sample ---
 ## Create a random sample of 1000 tweets from all tweets
 ## file = read.csv("tweets/french_cand.tweets.csv", header=TRUE)
 ## sample = file[sample(1:nrow(file), 1000,
 ##    replace=FALSE),]
-## write.csv(sample, "tweets/sample.csv")
+## write.csv(sample, "tweets/sample.csv", row.names = FALSE)
 
 ## Comment to work with full datafile
 ## tweets = readtext("tweets/sample.csv", textfield = "text")
 
-## --- Remove wrongly assigned accounts and replace with correct ones ---
-## tweets = read.csv("tweets/french_cand.tweets.csv", header = TRUE)
-## ilecallennec = read.csv("tweets/ilecallennec.tweets.csv", header = TRUE)
-## tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
+## ## --- Remove wrongly assigned accounts and replace with correct ones ---
+tweets = read.csv("tweets/french_cand.tweets.csv", header = TRUE)
+ilecallennec = read.csv("tweets/ilecallennec.tweets.csv", header = TRUE)
+tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
 
-## tweets = rbind(tweets,ilecallennec)
-## tweets = unique(tweets)
-## write.csv(tweets, "tweets/all_french_cand.tweets.csv")
+tweets = rbind(tweets,ilecallennec)
+
+## ## Remove line breaks
+tweets$text = gsub("\n"," ",tweets$text)
+
+## Fixing duplicates with different retweet counts that are not detected by unique()
+tweets = unique(subset(tweets, select = -retweet_count))
+
+## write.csv(tweets, "tweets/all_french_cand.tweets.csv", row.names = FALSE)
 
 ## --- Exploring and subsetting datafile ---
 tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
@@ -128,13 +151,13 @@ twCorpus$documents$texts = gsub("RT "," ",twCorpus$documents$texts)
 ## Remove address marker "cc"
 twCorpus$documents$texts = gsub(" cc "," ",twCorpus$documents$texts)
 
-## Remove numeration marker "er" and "ème"
-twCorpus$documents$texts = gsub(" (er)|((è|e)me) "," ",twCorpus$documents$texts)
-
 ## twCorpus$documents$texts = gsub("œ","oe",twCorpus$documents$texts)
 
-## Remove non alphabetical characters and keep accented alpha characters, -, _ and twitter characters
+## Remove non alphabetical characters (keep accented alpha characters, -, _ and twitter characters)
 twCorpus$documents$texts = gsub("[^-_a-zA-Z\u00C0-\u00FC@#œ]", " ", twCorpus$documents$texts)
+
+## Remove numeration marker "er" and "ème"
+twCorpus$documents$texts = gsub(" (er)|((è|e)me) "," ",twCorpus$documents$texts)
 
 ## Replace abbreviations by entire word
 twCorpus$documents$texts = gsub(" ds "," dans ",twCorpus$documents$texts)
@@ -169,17 +192,15 @@ ntoken(twCorpus)
 ntype(tolower(twCorpus))
 
 ## carpentierjn: only one tweet
-## Keep only documents with more than 40 types
-twCorpus = corpus_subset(twCorpus, ntype(tolower(twCorpus)) > 40)
+## Candidates that are to be removed
+## removed = twCorpus$documents$name[ntype(tolower(twCorpus)) < 50]
 
-## Candidates that were removed
-removed = twCorpus$documents$name[ntype(tolower(twCorpus)) <= 40]
+## Keep only documents with more than 40 types
+twCorpus = corpus_subset(twCorpus, ntype(tolower(twCorpus)) > 50)
 
 ## Keywords in context
 kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
 kwic_marché = kwic(tolower(twCorpus$documents$text), "marché", window = 3)
-
-View(kwic(tolower(twCorpus$documents$text), "trorisme", window = 3))
 
 ## --- Create a document-frequency matrix ---
 
@@ -210,10 +231,16 @@ dotchart(sort(readab))
 ## Compute document similarities
 simil = as.matrix(textstat_simil(dfm_weight(twdfm, "relFreq")), margin = "documents", method = "cosine")
 
+## Set minimum value to 0
+simil = pmax(simil, 0)
+
 ## Mean of similarity of each candidate compared to the others
 simil_mean = unlist(lapply(1:ndoc(twCorpus),function(cand){
 mean(simil[,cand])
 }))
+
+## kmeans on similarity matrix
+km_simil = kmeans(simil, 5)
 
 ## Only on specified documents 
 ## as.list(textstat_simil(twdfm, c("cand_tweets.csv.292","cand_tweets.csv.291"), margin = "documents", method = "cosine"))
@@ -278,21 +305,3 @@ kc = kmeans(twdfm, k)
 classes = lapply(1:k, function(n){
     unique(cand_tweets[kc$cluster == n,]$name)
 })
-
-
-## --- Retrieving candidates social and political characteristics ---
-require(readstata13)
-data = read.dta13("french_cand_data.dta")
-
-## Correct wrongly assigned account
-index = which(tolower(data$COMPTE) == "lecallennec")
-data$COMPTE[index] = "ilecallennec" 
-data$COMPTE = tolower(data$COMPTE)
-
-## Merge candidates database with mean similarity scores
-to_match = data.frame(account = tolower(twCorpus$documents$name), simil_mean = simil_mean)
-
-cand_data = merge(x=to_match, y=data, by.x='account', by.y='COMPTE')
-colnames(cand_data) = tolower(colnames(cand_data))
-
-write.csv(cand_data, "tweets/cand_data.csv")
