@@ -49,17 +49,17 @@ options(scipen=999)
 ## tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
 ## tweets = rbind(tweets,ilecallennec)
 
-## Loading parties tweets
+## ## Loading parties tweets
 ## ptweets = read.csv("tweets/french_parties.tweets.csv", header = TRUE)
 
-## Removing duplicates
-rm_duplicate = function(filename){
+## ## Removing duplicates
+## rm_duplicate = function(filename){
 
-    ## Remove line breaks
-    filename$text = gsub("\n"," ",filename$text)
-    ## Fixing duplicates with different retweet counts that are not detected by unique()
-    filename = unique(subset(filename, select = -retweet_count))
-}
+##     ## Remove line breaks
+##     filename$text = gsub("\n"," ",filename$text)
+##     ## Fixing duplicates with different retweet counts that are not detected by unique()
+##     filename = unique(subset(filename, select = -retweet_count))
+## }
 
 ## unique_tweets = rm_duplicate(tweets)
 ## unique_ptweets = rm_duplicate(ptweets)
@@ -159,7 +159,8 @@ twCorpus = corpus(cand_tweets)
 ptwCorpus = corpus(parties_tweets)
 
 ## Clean corpuses
-clean = function(corpus_texts){
+clean = function(corpus_texts)
+{
 
     corpus_texts = gsub("ht(tps)?[^ ]+","",corpus_texts)
 
@@ -210,15 +211,12 @@ clean = function(corpus_texts){
     ## Remove non-necessary whitespace
     corpus_texts = gsub(" +", " ", corpus_texts) ## in the middle of the string
     corpus_texts = gsub("^ +| +$", "", corpus_texts) ## at both ends of the string
-
 }
 
 twCorpus$documents$texts = clean(twCorpus$documents$texts)
 ptwCorpus$documents$texts = clean(ptwCorpus$documents$texts)
 
 ## --- Descriptive statistics on corpus
-twCorpus = ptwCorpus
-
 ## Return the number of documents
 ndoc(twCorpus)           
 
@@ -239,7 +237,7 @@ twCorpus = corpus_subset(twCorpus, ntype(tolower(twCorpus)) > 50)
 
 ## Keywords in context
 kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
-kwic_marché = kwic(tolower(twCorpus$documents$text), "marché", window = 3)
+kwic_marché = rbind(kwic(tolower(twCorpus$documents$text), "marché", window = 3),kwic(tolower(ptwCorpus$documents$text), "marché", window = 3))
 
 ## --- Create a document-frequency matrix ---
 
@@ -247,16 +245,41 @@ kwic_marché = kwic(tolower(twCorpus$documents$text), "marché", window = 3)
 my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
 my_stopwords = c(my_stopwords, "faire", "faut", "veux","veut","oui","non")
 
-twdfm = dfm(twCorpus, remove = c(stopwords("french"), stopwords("english"), my_stopwords), tolower = TRUE, remove_punct = TRUE, stem = FALSE, remove_twitter = TRUE, remove_numbers = TRUE)
+to_dfm = function(corpus, groups = NULL)
+{
+    twdfm = dfm(corpus,
+                remove = c(stopwords("french"), stopwords("english"), my_stopwords),
+                tolower = TRUE,
+                remove_punct = TRUE,
+                stem = FALSE,
+                remove_twitter = TRUE,
+                remove_numbers = TRUE,
+                groups = groups)
+}
+
+
+
+twdfm = to_dfm(twCorpus)
+ptwdfm = to_dfm(ptwCorpus)
 
 ## Extract feature labels and document names
-head(featnames(twdfm), 30)
-head(docnames(twdfm))
+head(featnames(ptwdfm), 30)
+head(docnames(ptwdfm))
 
 ## 100 most frequent features in the dfm
 top_feat = topfeatures(twdfm, n=200)
+
 ## Create a wordcloud with most frequent features
+par(mfrow=c(1,2), oma = c(0, 0, 10, 0))
 textplot_wordcloud(twdfm, max=100)
+textplot_wordcloud(ptwdfm, max=100)
+
+docvars(twCorpus, "docset") = 1 
+docvars(ptwCorpus, "docset") = 2
+allCorpus = twCorpus + ptwCorpus
+summary(allCorpus, 5)
+
+alldfm = to_dfm(allCorpus,"docset")
 
 ## --- Diversity, readability and similarity measures ---
 ## Compute lexical diversity of texts on a dfm
@@ -269,6 +292,7 @@ readab = textstat_readability(cand_tweets$text,
 dotchart(sort(readab))
 ## Compute document similarities
 simil = as.matrix(textstat_simil(dfm_weight(twdfm, "relFreq")), margin = "documents", method = "cosine")
+
 
 ## Only on specified documents 
 ## as.list(textstat_simil(twdfm, c("cand_tweets.csv.292","cand_tweets.csv.291"), margin = "documents", method = "cosine"))
