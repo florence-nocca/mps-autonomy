@@ -44,22 +44,33 @@ options(scipen=999)
 ## tweets = readtext("tweets/sample.csv", textfield = "text")
 
 ## ## --- Remove wrongly assigned accounts and replace with correct ones ---
-tweets = read.csv("tweets/french_cand.tweets.csv", header = TRUE)
-ilecallennec = read.csv("tweets/ilecallennec.tweets.csv", header = TRUE)
-tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
+## tweets = read.csv("tweets/french_cand.tweets.csv", header = TRUE)
+## ilecallennec = read.csv("tweets/ilecallennec.tweets.csv", header = TRUE)
+## tweets = tweets[tolower(tweets$screen_name) != "lecallennec",]
+## tweets = rbind(tweets,ilecallennec)
 
-tweets = rbind(tweets,ilecallennec)
+## Loading parties tweets
+## ptweets = read.csv("tweets/french_parties.tweets.csv", header = TRUE)
 
-## ## Remove line breaks
-tweets$text = gsub("\n"," ",tweets$text)
+## Removing duplicates
+rm_duplicate = function(filename){
 
-## Fixing duplicates with different retweet counts that are not detected by unique()
-tweets = unique(subset(tweets, select = -retweet_count))
+    ## Remove line breaks
+    filename$text = gsub("\n"," ",filename$text)
+    ## Fixing duplicates with different retweet counts that are not detected by unique()
+    filename = unique(subset(filename, select = -retweet_count))
+}
 
-## write.csv(tweets, "tweets/all_french_cand.tweets.csv", row.names = FALSE)
+## unique_tweets = rm_duplicate(tweets)
+## unique_ptweets = rm_duplicate(ptweets)
+
+## write.csv(unique_tweets, "tweets/all_french_cand.tweets.csv", row.names = FALSE)
+## write.csv(unique_ptweets, "tweets/all_french_parties.tweets.csv", row.names = FALSE)
 
 ## --- Exploring and subsetting datafile ---
 tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
+
+ptweets = readtext("tweets/all_french_parties.tweets.csv", textfield = "text")
 
 ## Countries in the dataset
 unique(tweets$country)
@@ -76,14 +87,21 @@ timeline = as.Date(unique(tweets$created_at))
 boxplot(timeline)
 
 ## Define upper and lower bounds
-first_tweet = min(grep("2017-03",timeline, value = TRUE))
-last_tweet = "2017-06-19"
+first_tweet = as.Date("2017-03-01")
+last_tweet = as.Date("2017-06-18")
 
 ## Subset the sample to keep campaign tweets only
-campaign_tweets = tweets[tweets$created_at >= first_tweet & tweets$created_at <= last_tweet,]
-campaign_timeline = as.Date(campaign_tweets$created_at)
+campaign_subset = function(filename){
+
+    campaign_filename = filename[as.Date(filename$created_at) >= first_tweet & as.Date(filename$created_at) <= last_tweet,]
+
+}
+
+campaign_tweets = campaign_subset(tweets)
+campaign_ptweets = campaign_subset(ptweets)
 
 ## Tweets repartition
+campaign_timeline = as.Date(campaign_tweets$created_at)
 ### By weekday
 barplot(table(sort(weekdays(campaign_timeline))))
 ## By month
@@ -107,77 +125,99 @@ end_date = "2017-04-05 00:00:00"
 sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
 sample(sub_tweets$text,15)
 
-## Keep only French tweets
-tweets = tweets[tweets$lang == "fr",]
+## Creating one-author documents
+sort_by_author = function(filename)
+{
+    ## Keep only French filename
+    filename = filename[filename$lang == "fr",]
+    
+    ## Keep only candidates' names and filename and create one document per candidate
+    filename = data.frame(name = filename$screen_name, text = filename$text)
+    filename = filename %>% group_by(name) %>% nest() %>% collect()
+    filename = filename %>% group_by(name) %>%
+        mutate(data = map(data, function(x) return(paste(as.character(unlist(x)), collapse=" ")))) %>% collect()
+    filename$data = unlist(filename$data)
+    filename = data.frame(name = filename$name, text = filename$data)
+}
 
-## Keep only candidates' names and tweets and create one document per candidate
-cand_tweets = data.frame(name = campaign_tweets$screen_name, text = campaign_tweets$text)
-cand_tweets = cand_tweets %>% group_by(name) %>% nest() %>% collect()
-cand_tweets = cand_tweets %>% group_by(name) %>%
-            mutate(data = map(data, function(x) return(paste(as.character(unlist(x)), collapse=" ")))) %>% collect()
-cand_tweets$data = unlist(cand_tweets$data)
-cand_tweets = data.frame(name = cand_tweets$name, text = cand_tweets$data)
+cand_tweets = sort_by_author(campaign_tweets)
+parties_tweets = sort_by_author(campaign_ptweets)
 
 ## Write result as csv
 write.csv(cand_tweets, "tweets/cand_campaign_tweets.csv")
+write.csv(parties_tweets, "tweets/parties_campaign_tweets.csv")
 
 ## --- The code above needs only to be executed once ---
 
 ## --- Preparing text for analysis ---
 cand_tweets = readtext("tweets/cand_campaign_tweets.csv", textfield = "text")
 
+parties_tweets = readtext("tweets/parties_campaign_tweets.csv", textfield = "text")
+
 ## Create a quanteda corpus
 twCorpus = corpus(cand_tweets)
+ptwCorpus = corpus(parties_tweets)
 
-## Remove urls
-twCorpus$documents$texts = gsub("ht(tps)?[^ ]+","",twCorpus$documents$texts)
+## Clean corpuses
+clean = function(corpus_texts){
 
-twCorpus$documents$texts = gsub("(m\\.)?youtube\\.[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Youtube URLs
+    corpus_texts = gsub("ht(tps)?[^ ]+","",corpus_texts)
 
-twCorpus$documents$texts = gsub("(pic\\.)?twitter[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Twitter URLs
+    corpus_texts = gsub("(m\\.)?youtube\\.[^ ]*", "", corpus_texts, perl=TRUE, ignore.case=TRUE) ## remove Youtube URLs
 
-twCorpus$documents$texts = gsub("fb.me[^ ]*", "", twCorpus$documents$texts, perl=TRUE, ignore.case=TRUE) ## remove Facebook URLs
+    corpus_texts = gsub("(pic\\.)?twitter[^ ]*", "", corpus_texts, perl=TRUE, ignore.case=TRUE) ## remove Twitter URLs
 
-twCorpus$documents$texts = gsub("[^ ]*\\.fr", "", twCorpus$documents$texts)
+    corpus_texts = gsub("fb.me[^ ]*", "", corpus_texts, perl=TRUE, ignore.case=TRUE) ## remove Facebook URLs
 
-## Remove html entities
-twCorpus$documents$texts = gsub("&(gt|lt|amp|nbsp);","",twCorpus$documents$texts)
+    corpus_texts = gsub("[^ ]*\\.fr", "", corpus_texts)
 
-## Optional: remove mentions (@username)
-## twCorpus$documents$texts = gsub("@[^ ]+","",twCorpus$documents$texts)
+    ## Remove html entities
+    corpus_texts = gsub("&(gt|lt|amp|nbsp);","",corpus_texts)
 
-## Remove retweet marker (RT)
-twCorpus$documents$texts = gsub("RT "," ",twCorpus$documents$texts)
-## Remove address marker "cc"
-twCorpus$documents$texts = gsub(" cc "," ",twCorpus$documents$texts)
+    corpus_texts = gsub("\n"," ",corpus_texts)
 
-## twCorpus$documents$texts = gsub("œ","oe",twCorpus$documents$texts)
+    ## Optional: remove mentions (@username)
+    ## corpus_texts = gsub("@[^ ]+","",corpus_texts)
 
-## Remove non alphabetical characters (keep accented alpha characters, -, _ and twitter characters)
-twCorpus$documents$texts = gsub("[^-_a-zA-Z\u00C0-\u00FC@#œ]", " ", twCorpus$documents$texts)
+    ## Remove retweet marker (RT)
+    corpus_texts = gsub("RT "," ",corpus_texts)
+    ## Remove address marker "cc"
+    corpus_texts = gsub(" cc "," ",corpus_texts)
 
-## Remove numeration marker "er" and "ème"
-twCorpus$documents$texts = gsub(" (er)|((è|e)me) "," ",twCorpus$documents$texts)
+    ## corpus_texts = gsub("œ","oe",corpus_texts)
 
-## Replace abbreviations by entire word
-twCorpus$documents$texts = gsub(" ds "," dans ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" jms "," jamais ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" fr "," france ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" pr "," pour ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" rf "," république française ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" (rdv)(rendez vous) "," rendez-vous ",twCorpus$documents$texts)
-twCorpus$documents$texts = gsub(" st( |-)"," saint-",twCorpus$documents$texts)
+    ## Remove non alphabetical characters (keep accented alpha characters, -, _ and twitter characters)
+    corpus_texts = gsub("[^-_a-zA-Z\u00C0-\u00FC@#œ]", " ", corpus_texts)
 
-## Remove one-character words
-twCorpus$documents$texts = gsub("^. +"," ",twCorpus$documents$texts) ## at the beginning of the string
-twCorpus$documents$texts = gsub(" .$"," ",twCorpus$documents$texts) ## at the end of the string
-twCorpus$documents$texts = gsub(" . "," ",twCorpus$documents$texts) ## in the middle of the string
+    ## Remove numeration marker "er" and "ème"
+    corpus_texts = gsub(" (er)|((è|e)me) "," ",corpus_texts)
 
-## Remove non-necessary whitespace
-twCorpus$documents$texts = gsub(" +", " ", twCorpus$documents$texts) ## in the middle of the string
-twCorpus$documents$texts = gsub("^ +| +$", "", twCorpus$documents$texts) ## at both ends of the string
+    ## Replace abbreviations by entire word
+    corpus_texts = gsub(" ds "," dans ",corpus_texts)
+    corpus_texts = gsub(" dt "," dont ",corpus_texts)
+    corpus_texts = gsub(" jms "," jamais ",corpus_texts)
+    corpus_texts = gsub(" fr "," france ",corpus_texts)
+    corpus_texts = gsub(" pr "," pour ",corpus_texts)
+    corpus_texts = gsub(" rf "," république française ",corpus_texts)
+    corpus_texts = gsub(" (rdv)(rendez vous) "," rendez-vous ",corpus_texts)
+    corpus_texts = gsub(" st( |-)"," saint-",corpus_texts)
+
+    ## Remove one-character words
+    corpus_texts = gsub("^. +"," ",corpus_texts) ## at the beginning of the string
+    corpus_texts = gsub(" .$"," ",corpus_texts) ## at the end of the string
+    corpus_texts = gsub(" . "," ",corpus_texts) ## in the middle of the string
+
+    ## Remove non-necessary whitespace
+    corpus_texts = gsub(" +", " ", corpus_texts) ## in the middle of the string
+    corpus_texts = gsub("^ +| +$", "", corpus_texts) ## at both ends of the string
+
+}
+
+twCorpus$documents$texts = clean(twCorpus$documents$texts)
+ptwCorpus$documents$texts = clean(ptwCorpus$documents$texts)
 
 ## --- Descriptive statistics on corpus
+twCorpus = ptwCorpus
 
 ## Return the number of documents
 ndoc(twCorpus)           
@@ -191,7 +231,6 @@ ntoken(twCorpus)
 ## How many types (unique words)
 ntype(tolower(twCorpus))
 
-## carpentierjn: only one tweet
 ## Candidates that are to be removed
 ## removed = twCorpus$documents$name[ntype(tolower(twCorpus)) < 50]
 
