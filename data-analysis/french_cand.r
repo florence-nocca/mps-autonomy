@@ -231,6 +231,9 @@ dotchart(sort(readab))
 ## Compute document similarities
 simil = as.matrix(textstat_simil(dfm_weight(twdfm, "relFreq")), margin = "documents", method = "cosine")
 
+## Only on specified documents 
+## as.list(textstat_simil(twdfm, c("cand_tweets.csv.292","cand_tweets.csv.291"), margin = "documents", method = "cosine"))
+
 ## Set minimum value to 0
 simil = pmax(simil, 0)
 
@@ -240,10 +243,109 @@ mean(simil[,cand])
 }))
 
 ## kmeans on similarity matrix
-km_simil = kmeans(simil, 5)
+k = 4
+km_simil = kmeans(simil, k)
 
-## Only on specified documents 
-## as.list(textstat_simil(twdfm, c("cand_tweets.csv.292","cand_tweets.csv.291"), margin = "documents", method = "cosine"))
+classes = lapply(1:k, function(n){
+    unique(cand_tweets[km_simil$cluster == n,]$name)
+})
+
+
+## Create empty data frame
+mps_simil = data.frame(account = character(), class_simil = numeric(), stringsAsFactors = FALSE)
+
+## Append data frame with accounts and their corresponding class
+for(i in 1:k){
+    mps_simil = rbind(mps_simil, data.frame(account = tolower(classes[[i]]), class_simil = rep(i, length(classes[[i]]))))
+}
+
+## Merge with database on mps, making sure that the parameter na.strings is equal to c("") so that each missing value is coded as a NA
+cand_data = read.csv("tweets/cand_data.csv", header = TRUE, na.strings=c(""))
+
+## Keep only candidates mps
+cand_data = cand_data[cand_data$represente == 1,]
+
+## Replace starting date by starting year only
+cand_data$debutmandat = as.numeric(unlist(regmatches(as.character(cand_data$debutmandat)
+, regexec("^[^-]+", as.character(cand_data$debutmandat)
+))))
+
+cand_data$naissance = as.numeric(unlist(regmatches(as.character(cand_data$naissance)
+, regexec("^[^-]+", as.character(cand_data$naissance)
+))))
+
+cand_data = merge(cand_data, mps_simil, by = "account")
+
+## Exploring each class
+sum_1 = summary(cand_data[cand_data$class_simil == 1,])
+sum_2 = summary(cand_data[cand_data$class_simil == 2,])
+sum_3 = summary(cand_data[cand_data$class_simil == 3,])
+sum_4 = summary(cand_data[cand_data$class_simil == 4,])
+## sum_5 = summary(cand_data[cand_data$class_simil == 5,])
+
+table(cand_data[cand_data$class_simil == 1,]$nuance)
+table(cand_data[cand_data$class_simil == 2,]$nuance)
+table(cand_data[cand_data$class_simil == 3,]$nuance)
+table(cand_data[cand_data$class_simil == 4,]$nuance)
+## table(cand_data[cand_data$class_simil == 5,]$nuance)
+
+
+library(knitr)
+library(caret)
+library(gmodels)
+library(lattice)
+library(ggplot2)
+library(gridExtra)
+library(Kmisc)
+library(ROCR)
+library(corrplot)
+
+## --- Exploratory Analysis ---
+set.seed(1023)
+
+## Looking at data structure
+str(cand_data)
+
+cand_data_subset = subset(cand_data, select = c(account,sex,naissance,nuance,class_simil))
+colnames(cand_data_subset)
+
+cand_data_subset$class_simil = as.factor(cand_data_subset$class_simil)
+
+cand_data_subset$naissance = as.factor(cand_data_subset$naissance)
+
+cand_data_subset$sex = as.factor(cand_data_subset$sex)
+
+kable(head(cand_data_subset))
+
+## Counting NAs
+cols_withNa = apply(cand_data_subset, 2, function(x) sum(is.na(x)))
+## No NA in the dataset
+
+## --- Categorical Variable Analysis ---
+factor_vars = names(which(sapply(cand_data_subset, class) == "factor"))
+factor_vars = setdiff(factor_vars, "class_simil")
+factor_vars = setdiff(factor_vars, "account")
+
+chisq_test_res = lapply(factor_vars, function(x) { 
+    chisq.test(cand_data_subset[,x], cand_data_subset[, "class_simil"], simulate.p.value = TRUE)
+})
+
+names(chisq_test_res) = factor_vars
+
+## Chi-squared p-value results tell us that class simil values do not depend upon nuance nor naissance (as p.value > 0.05)
+chisq_test_res
+
+## Significativeness of given categorical variables with barcharts with the cross table row proportions as input
+barchart_res = lapply(factor_vars, function(x) { 
+    title = colnames(cand_data_subset[,x, drop=FALSE])
+    wgd = CrossTable(cand_data_subset[,x], cand_data_subset$class_simil, prop.chisq=F)
+    barchart(wgd$prop.row, stack=F, auto.key=list(rectangles = TRUE, space = "top", title = title))
+})
+
+names(barchart_res) = factor_vars
+barchart_res$nuance
+barchart_res$naissance
+barchart_res$sex
 
 ## --- Hierarchical clustering ---
 ## Dfm = dfm_trim(twdfm, min_count = 5, min_docfreq = 3)
