@@ -67,85 +67,85 @@ options(scipen=999)
 ## write.csv(unique_tweets, "tweets/all_french_cand.tweets.csv", row.names = FALSE)
 ## write.csv(unique_ptweets, "tweets/all_french_parties.tweets.csv", row.names = FALSE)
 
-## --- Exploring and subsetting datafile ---
-tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
+## ## --- Exploring and subsetting datafile ---
+## tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
 
-ptweets = readtext("tweets/all_french_parties.tweets.csv", textfield = "text")
+## ptweets = readtext("tweets/all_french_parties.tweets.csv", textfield = "text")
 
-## Countries in the dataset
-unique(tweets$country)
-unique(tweets[tweets$country == "Taiwan",]$screen_name)
+## ## Countries in the dataset
+## unique(tweets$country)
+## unique(tweets[tweets$country == "Taiwan",]$screen_name)
 
-## Language repartition in the dataset
-barplot(table(tweets$lang))
-## Top languages: fr, en, sp (und: undetermined, tweets containing urls or mentions only)
-## How many tweets not written in French
-length(unique(tweets[tweets$lang != "fr",]$text))
+## ## Language repartition in the dataset
+## barplot(table(tweets$lang))
+## ## Top languages: fr, en, sp (und: undetermined, tweets containing urls or mentions only)
+## ## How many tweets not written in French
+## length(unique(tweets[tweets$lang != "fr",]$text))
 
-## Timeline
-timeline = as.Date(unique(tweets$created_at))
-boxplot(timeline)
+## ## Timeline
+## timeline = as.Date(unique(tweets$created_at))
+## boxplot(timeline)
 
-## Define upper and lower bounds
-first_tweet = as.Date("2017-03-01")
-last_tweet = as.Date("2017-06-18")
+## ## Define upper and lower bounds
+## first_tweet = as.Date("2017-03-01")
+## last_tweet = as.Date("2017-06-18")
 
-## Subset the sample to keep campaign tweets only
-campaign_subset = function(filename){
+## ## Subset the sample to keep campaign tweets only
+## campaign_subset = function(filename){
 
-    campaign_filename = filename[as.Date(filename$created_at) >= first_tweet & as.Date(filename$created_at) <= last_tweet,]
+##     campaign_filename = filename[as.Date(filename$created_at) >= first_tweet & as.Date(filename$created_at) <= last_tweet,]
 
-}
+## }
 
-campaign_tweets = campaign_subset(tweets)
-campaign_ptweets = campaign_subset(ptweets)
+## campaign_tweets = campaign_subset(tweets)
+## campaign_ptweets = campaign_subset(ptweets)
 
-## Tweets repartition
-campaign_timeline = as.Date(campaign_tweets$created_at)
-### By weekday
-barplot(table(sort(weekdays(campaign_timeline))))
-## By month
-barplot(table(months(campaign_timeline)))
+## ## Tweets repartition
+## campaign_timeline = as.Date(campaign_tweets$created_at)
+## ### By weekday
+## barplot(table(sort(weekdays(campaign_timeline))))
+## ## By month
+## barplot(table(months(campaign_timeline)))
 
-## During the whole period
-## Create a vector containing all days included in the campaign
-campaign_days = seq(as.Date("2017/3/1"), as.Date("2017/6/18"), "days")
+## ## During the whole period
+## ## Create a vector containing all days included in the campaign
+## campaign_days = seq(as.Date("2017/3/1"), as.Date("2017/6/18"), "days")
 
-## Create a table of number of tweets per day and remove one per cell (as campaign_days artificially adds one tweet per cell)
-tw_per_days = table(c(campaign_days,campaign_timeline)) - 1
+## ## Create a table of number of tweets per day and remove one per cell (as campaign_days artificially adds one tweet per cell)
+## tw_per_days = table(c(campaign_days,campaign_timeline)) - 1
 
-barplot(tw_per_days, las = 2, ylab = "Nombre de tweets", main = "Distribution des tweets durant la campagne", cex.main = 1.5, xaxt="n")
-labs = substr((campaign_days),6,10)
-axis(1, at =(1:length(labs) * 1.2 - 0.5), labels=labs, las=2)
+## barplot(tw_per_days, las = 2, ylab = "Nombre de tweets", main = "Distribution des tweets durant la campagne", cex.main = 1.5, xaxt="n")
+## labs = substr((campaign_days),6,10)
+## axis(1, at =(1:length(labs) * 1.2 - 0.5), labels=labs, las=2)
 
-## Explore peaks
-start_date = "2017-04-04 00:00:00"
-end_date = "2017-04-05 00:00:00"
+## ## Explore peaks
+## start_date = "2017-04-04 00:00:00"
+## end_date = "2017-04-05 00:00:00"
 
-sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
-sample(sub_tweets$text,15)
+## sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
+## sample(sub_tweets$text,15)
 
-## Creating one-author documents
-sort_by_author = function(filename)
-{
-    ## Keep only French filename
-    filename = filename[filename$lang == "fr",]
+## ## Creating one-author documents
+## sort_by_author = function(filename)
+## {
+##     ## Keep only French filename
+##     filename = filename[filename$lang == "fr",]
     
-    ## Keep only candidates' names and filename and create one document per candidate
-    filename = data.frame(name = filename$screen_name, text = filename$text)
-    filename = filename %>% group_by(name) %>% nest() %>% collect()
-    filename = filename %>% group_by(name) %>%
-        mutate(data = map(data, function(x) return(paste(as.character(unlist(x)), collapse=" ")))) %>% collect()
-    filename$data = unlist(filename$data)
-    filename = data.frame(name = filename$name, text = filename$data)
-}
+##     ## Keep only candidates' names and filename and create one document per candidate
+##     filename = data.frame(name = filename$screen_name, text = filename$text)
+##     filename = filename %>% group_by(name) %>% nest() %>% collect()
+##     filename = filename %>% group_by(name) %>%
+##         mutate(data = map(data, function(x) return(paste(as.character(unlist(x)), collapse=" ")))) %>% collect()
+##     filename$data = unlist(filename$data)
+##     filename = data.frame(name = filename$name, text = filename$data)
+## }
 
-cand_tweets = sort_by_author(campaign_tweets)
-parties_tweets = sort_by_author(campaign_ptweets)
+## cand_tweets = sort_by_author(campaign_tweets)
+## parties_tweets = sort_by_author(campaign_ptweets)
 
-## Write result as csv
-write.csv(cand_tweets, "tweets/cand_campaign_tweets.csv")
-write.csv(parties_tweets, "tweets/parties_campaign_tweets.csv")
+## ## Write result as csv
+## write.csv(cand_tweets, "tweets/cand_campaign_tweets.csv")
+## write.csv(parties_tweets, "tweets/parties_campaign_tweets.csv")
 
 ## --- The code above needs only to be executed once ---
 
@@ -277,9 +277,25 @@ textplot_wordcloud(ptwdfm, max=100)
 docvars(twCorpus, "docset") = 1 
 docvars(ptwCorpus, "docset") = 2
 allCorpus = twCorpus + ptwCorpus
-summary(allCorpus, 5)
 
-alldfm = to_dfm(allCorpus,"docset")
+alldfm = to_dfm(allCorpus)
+
+tokenInfo = summary(allCorpus, n = ndoc(allCorpus))
+
+## Barplot of tokens by candidate
+barplot(tokenInfo$Tokens, las = 2, ylab = "Nombre de tokens", main = "Nombre de tokens par compte", cex.main = 1.5, xaxt="n")
+labs = tolower(tokenInfo$name)
+abline(h=mean(tokenInfo$Tokens), col = "blue")
+abline(h=median(tokenInfo$Tokens), col = "red")
+axis(1, at =(1:length(labs) * 1.2 - 0.5), labels=labs, las=2)
+legend('topright',legend = c("Moyenne","Médiane") , lty=1, col=c("blue", "red"), bty='n', cex=.75)
+## For a barplot with sorted values: sort(tokenInfo$Tokens, decreasing = TRUE
+
+## Histogram
+hist(tokenInfo$Tokens, ylab = "Nombre de candidats", xlab = "Nombre de tokens par candidats", main = "Nombre de tokens par candidats", cex.main = 1.5, col = "gray", xlim = c(min(tokenInfo$Tokens),max(tokenInfo$Tokens)+10000), ylim = c(0,200), breaks = 20)
+abline(v=mean(tokenInfo$Tokens), col = "blue")
+abline(v=median(tokenInfo$Tokens), col = "red")
+legend('topright',legend = c("Moyenne","Médiane") , lty=1, col=c("blue", "red"), bty='n', cex=.75)
 
 ## --- Diversity, readability and similarity measures ---
 ## Compute lexical diversity of texts on a dfm
@@ -287,11 +303,14 @@ textstat_lexdiv(twdfm, "R")
 dotchart(sort(textstat_lexdiv(twdfm, "R")))
 
 ## Compute readability of texts on a vector of texts or a corpus:
-readab = textstat_readability(cand_tweets$text, 
+readab = textstat_readability(allCorpus, 
                                measure = "Flesch.Kincaid")
 dotchart(sort(readab))
 ## Compute document similarities
 simil = as.matrix(textstat_simil(dfm_weight(twdfm, "relFreq")), margin = "documents", method = "cosine")
+
+
+simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("parties_campaign_tweets.csv.1","parties_campaign_tweets.csv.2","parties_campaign_tweets.csv.3","parties_campaign_tweets.csv.4","parties_campaign_tweets.csv.5","parties_campaign_tweets.csv.6","parties_campaign_tweets.csv.7","parties_campaign_tweets.csv.8","parties_campaign_tweets.csv.9")), margin = "documents", method = "cosine")
 
 
 ## Only on specified documents 
@@ -353,6 +372,14 @@ table(cand_data[cand_data$class_simil == 4,]$nuance)
 ## table(cand_data[cand_data$class_simil == 5,]$nuance)
 
 
+ws = textmodel_wordscores(alldfm, c(rep(NA, 451), 3.83, 7.33, 1.11, 1.16, 5.91, 6, 3.25, 6.46, 1.11))
+
+pred = predict(ws)
+
+
+
+hist(pred)
+
 library(knitr)
 library(caret)
 library(gmodels)
@@ -409,6 +436,7 @@ names(barchart_res) = factor_vars
 barchart_res$nuance
 barchart_res$naissance
 barchart_res$sex
+
 
 ## --- Hierarchical clustering ---
 ## Dfm = dfm_trim(twdfm, min_count = 5, min_docfreq = 3)
@@ -470,3 +498,6 @@ kc = kmeans(twdfm, k)
 classes = lapply(1:k, function(n){
     unique(cand_tweets[kc$cluster == n,]$name)
 })
+
+
+    
