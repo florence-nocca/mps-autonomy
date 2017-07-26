@@ -54,7 +54,8 @@ cand_data = read.csv("tweets/cand_scores.csv", header = TRUE, na.strings=c(""))
 ## --- End ---
 
 ## Select parties
-ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr" | name == "franceinsoumise")
+## ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr" | name == "franceinsoumise")
+ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr")
 
 ## Add additional stopwords
 my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
@@ -128,7 +129,8 @@ predictWordscores = function(dfm, virgin_docs, ref_scores)
     return (pred)
 }
 
-model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91, 1.7))
+## model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91, 1.7))
+model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91))
 
 ## Scores to plot
 scores = model_1@textscores$textscore_raw
@@ -139,6 +141,9 @@ parties_scores = scores[(ndoc(twCorpus)+1):length(scores)]
 
 ## Create empty data frame
 mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
+
+## Remove previously computed wordscores
+cand_data = subset(cand_data, select = -wordscores)
 
 ## Merge by account names
 cand_data = merge(cand_data, mps_scores, by = "account")
