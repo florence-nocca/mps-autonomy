@@ -11,6 +11,7 @@ library(dplyr)
 library(multidplyr)
 library(purrr)
 library(stringr)
+library(stringi)
 library(graphics) # For dendrogram
 library(ape) # For dendrogram
 
@@ -59,7 +60,7 @@ ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrep
 
 ## Add additional stopwords
 my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
-my_stopwords = c(my_stopwords, "faire", "faut", "veux","veut","oui","non")
+my_stopwords = stri_trans_general(c(my_stopwords, "faire", "faut", "veux","veut","oui","non"), "Latin-ASCII")
 
 ## --- Create a document-frequency matrix ---
 to_dfm = function(corpus, groups = NULL)

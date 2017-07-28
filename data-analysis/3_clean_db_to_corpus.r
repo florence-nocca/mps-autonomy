@@ -10,6 +10,7 @@ library(dplyr)
 library(multidplyr)
 library(purrr)
 library(stringr)
+library(stringi)
 
 ## Use exact values instead of scientific notations
 options(scipen=999)
@@ -69,6 +70,7 @@ clean = function(corpus_texts)
     corpus_texts = gsub(" (rdv)(rendez vous) "," rendez-vous ",corpus_texts)
     corpus_texts = gsub(" st( |-)"," saint-",corpus_texts)
 
+    corpus_texts = stri_trans_general(corpus_texts, "Latin-ASCII")
     ## Remove one-character words
     corpus_texts = gsub("^. +"," ",corpus_texts) ## at the beginning of the string
     corpus_texts = gsub(" .$"," ",corpus_texts) ## at the end of the string
@@ -103,7 +105,7 @@ twCorpus = corpus_subset(twCorpus, ntype(tolower(twCorpus)) > 50)
 
 ## Keywords in context
 kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
-kwic_marché = rbind(kwic(tolower(twCorpus$documents$text), "marché", window = 3),kwic(tolower(ptwCorpus$documents$text), "marché", window = 3))
+kwic_marché = rbind(kwic(tolower(twCorpus$documents$text), "marche", window = 3),View(kwic(tolower(ptwCorpus$documents$text), "marche", window = 3))
 
 ## Save corpuses as R objects
 save(twCorpus, ptwCorpus, file = "tweets/corpus.Rdata")
