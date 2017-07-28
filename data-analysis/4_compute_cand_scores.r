@@ -21,33 +21,33 @@ options(scipen=999)
 ## Load corpuses
 load("tweets/corpus.Rdata")
 
-## --- First execution only ---
-## --- Retrieving candidates social and political characteristics ---
-require(readstata13)
-data = read.dta13("tweets/french_cand_data.dta")
-colnames(data) = tolower(colnames(data))
+## ## --- First execution only ---
+## ## --- Retrieving candidates social and political characteristics ---
+## require(readstata13)
+## data = read.dta13("tweets/french_cand_data.dta")
+## colnames(data) = tolower(colnames(data))
 
-## Correct wrongly assigned account
-index = which(tolower(data$compte) == "lecallennec")
-data$compte[index] = "ilecallennec" 
-data$compte = tolower(data$compte)
+## ## Correct wrongly assigned account
+## index = which(tolower(data$compte) == "lecallennec")
+## data$compte[index] = "ilecallennec" 
+## data$compte = tolower(data$compte)
 
-## Keep only candidates mps
-data = data[data$represente == 1,]
+## ## Keep only candidates mps
+## data = data[data$represente == 1,]
 
-## Replace starting date by starting year only
-data$debutmandat = as.numeric(unlist(regmatches(as.character(data$debutmandat)
-, regexec("^[^-]+", as.character(data$debutmandat)
-))))
+## ## Replace starting date by starting year only
+## data$debutmandat = as.numeric(unlist(regmatches(as.character(data$debutmandat)
+## , regexec("^[^-]+", as.character(data$debutmandat)
+## ))))
 
-data$naissance = as.numeric(unlist(regmatches(as.character(data$naissance)
-, regexec("^[^-]+", as.character(data$naissance)
-))))
+## data$naissance = as.numeric(unlist(regmatches(as.character(data$naissance)
+## , regexec("^[^-]+", as.character(data$naissance)
+## ))))
 
-## Keep only candidates from twCorpus
-to_match = data.frame(account = tolower(twCorpus$documents$name))
-cand_data = merge(x=to_match, y=data, by.x='account', by.y='compte')
-## --- End of first execution ---
+## ## Keep only candidates from twCorpus
+## to_match = data.frame(account = tolower(twCorpus$documents$name))
+## cand_data = merge(x=to_match, y=data, by.x='account', by.y='compte')
+## ## --- End of first execution ---
 
 ## --- Not first execution ---
 ## Read database on mps, making sure that the parameter na.strings is equal to c("") so that each missing value is coded as a NA
@@ -133,7 +133,7 @@ predictWordscores = function(dfm, virgin_docs, ref_scores)
 ## model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91, 1.7))
 model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91))
 
-## Scores to plot
+## Scores predicted by the model
 scores = model_1@textscores$textscore_raw
 
 ## Differentiate scores from mps and parties
@@ -149,10 +149,47 @@ cand_data = subset(cand_data, select = -wordscores)
 ## Merge by account names
 cand_data = merge(cand_data, mps_scores, by = "account")
 
-hist(cand_data[cand_data$nuance == "SOC",]$wordscores)
-hist(cand_data[cand_data$nuance == "LR",]$wordscores)
-hist(cand_data[cand_data$nuance == "COM",]$wordscores)
-hist(cand_data[cand_data$nuance == "REM",]$wordscores)
-hist(cand_data[cand_data$nuance == "UDI",]$wordscores)
+### Graphical representations
+## Graphical parameters
+parties_colors = data.frame(colors = c("red", "blue", "yellow"), row.names = ptwCorpus$documents$name)
+
+cand_colors = data.frame(colors = c("blue", "red", rep("gray",4), "yellow", rep("gray", 6)), row.names = unique(cand_data$nuance)) 
+
+colors = as.character(cand_colors[as.character(cand_data$nuance),])
+
+## Resolution options for plot
+width = 1300 * 0.7
+height = 768 * 0.7
+dpi = 200
+ratio = dpi / 72
+
+### Plot
+## y-axis
+len = length(cand_data$wordscores[cand_data$wordscores>0])
+
+## Labels
+labels = cand_data$account[cand_data$wordscores>0]
+
+## Save plot as png
+png("Graphs/Plot_wordscores_french_cand.png", width=width * ratio, height=height * ratio, res=dpi)
+x = cand_data$wordscores[cand_data$wordscores>0]
+plot(x=x, y=1:len, xlim=c(min(parties_scores,x), max(parties_scores,x)), xlab="Scores sur une échelle gauche-droite", ylab="Index des comptes", col=colors[cand_data$wordscores>0], main="Positionnement des candidats par rapport aux comptes des partis (LR, PS, REM)", cex.main=1.5, pch=1, cex=0)
+text(x=x, y=1:length(labels), labels=labels, cex=0.5, col=colors[cand_data$wordscores>0])
+abline(v=parties_scores, col=as.character(parties_colors[ptwCorpus$documents$name,]))
+legend(x=6.4, y=30, unique(ptwCorpus$documents$name), fill=as.character(parties_colors[ptwCorpus$documents$name,]), cex=0.8)
+dev.off()
+
+## Histograms by party
+pnames = c("SOC","LR","REM")
+
+## Save histograms as pdf
+pdf("Graphs/Hist_wordscores_french_cand.pdf")
+par(mfrow=c(3,1), oma = c(0, 0, 0, 0))
+lapply(1:length(pnames), function(n) {
+    x = cand_data$wordscores[cand_data$wordscores>0][cand_data$nuance == pnames[n]]
+    hist(x = x, breaks=seq(4.5,7,by=0.1), xlim=c(4.5,7),main=paste0(pnames[n]," (n = ",length(x),")"), xlab="", ylab="")
+    abline(v=parties_scores[n], col=as.character(as.data.frame(parties_colors)$colors[n]))
+})
+dev.off()
 
 write.csv(cand_data, "tweets/cand_scores.csv", row.names = FALSE)
