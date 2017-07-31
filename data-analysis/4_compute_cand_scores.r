@@ -54,12 +54,14 @@ load("tweets/corpus.Rdata")
 cand_data = read.csv("tweets/cand_scores.csv", header = TRUE, na.strings=c(""))
 ## --- End ---
 
+## Indicate party's account as docname
+docnames(ptwCorpus) = paste(docvars(ptwCorpus, "name"))
+
+ptwCorpus$documents$party = c("SOC","LR","PG","PCF","FN","REM","ECO","UDI","FI")
+
 ## Select parties
 ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr")
 ## ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr" | name == "fn_officiel" | name == "franceinsoumise" )
-
-## Indicate party's account as docname
-docnames(ptwCorpus) = paste(docvars(ptwCorpus, "name"))
 
 ## Add party as twCorpus' docvar
 cand_party = data.frame(party = cand_data$nuance, row.names = cand_data$account) 
@@ -110,9 +112,9 @@ textplot_wordcloud(twdfm, max=100)
 textplot_wordcloud(ptwdfm, max=100)
 
 ## Combine the two corpuses
-docvars(twCorpus, "docset") = 1 
-docvars(ptwCorpus, "docset") = 2
-allCorpus = twCorpus + ptwCorpus
+docvars(ptwCorpus, "docset") = 1 
+docvars(twCorpus, "docset") = 2
+allCorpus = ptwCorpus + twCorpus
 
 ## Transform alldfm to a dfm
 alldfm = to_dfm(allCorpus)
@@ -151,7 +153,7 @@ cand_data = merge(cand_data, simil, by = "account")
 ## --- Wordscores model ---
 predictWordscores = function(dfm, virgin_docs, ref_scores)
 {
-    scores = c(rep(NA, ndoc(virgin_docs)), ref_scores)
+    scores = c(ref_scores, rep(NA, ndoc(virgin_docs)))
     ws = textmodel_wordscores(dfm, scores)
     pred = predict(ws)
     return (pred)
@@ -164,8 +166,8 @@ model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91))
 scores = model_1@textscores$textscore_raw
 
 ## Differentiate scores from mps and parties
-mps_scores = scores[1:ndoc(twCorpus)]
-parties_scores = scores[(ndoc(twCorpus)+1):length(scores)]
+parties_scores = scores[1:ndoc(ptwCorpus)]
+mps_scores = scores[(ndoc(ptwCorpus)+1):length(scores)]
 
 ## Create empty data frame
 mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
@@ -223,14 +225,50 @@ lapply(1:length(pnames), function(n) {
 dev.off()
 
 ## --- Wordfish model ---
-twCorpus = corpus_subset(twCorpus, party %in% c("SOC","LR")
-ptwCorpus = corpus_subset(ptwCorpus, name %in% c("partisocialiste", "lesrepublicains"))
-allCorpus = twCorpus + ptwCorpus
-alldfm = to_dfm(allCorpus)
-alldfm = dfm_wordstem(alldfm, language = "french")
 
-wfm1 = textmodel_wordfish(alldfm, dir = c(120,121))
+predictWordfish = function(twCorpus, ptwCorpus, cand_party, parties_to_keep)
+{
 
-textplot_scale1d(wfm1)
+    subtwCorpus = corpus_subset(twCorpus, party %in% cand_party)
+    subptwCorpus = corpus_subset(ptwCorpus, name %in% parties_to_keep)
+    allCorpus = subtwCorpus + subptwCorpus
+    alldfm = to_dfm(allCorpus)
+    alldfm = dfm_wordstem(alldfm, language = "french")
+
+    len_corpus = length(subtwCorpus$documents$name)
+
+    wf = textmodel_wordfish(alldfm, dir = c(len_corpus + 1, len_corpus + 2))
+    return (wf)
+}
+
+wfm = predictWordfish(twCorpus, ptwCorpus, c("REM","SOC"), c("enmarchefr", "partisocialiste"))
+textplot_scale1d(wfm)
+
+## --- Naive Bayesian ---
+trainingset = to_dfm(allCorpus$documents$text)
+
+trainingclass = factor(allCorpus$documents$party[1:3])
+model = textmodel_NB(trainingset, trainingclass)
+
+## Party prediction
+success = unlist(lapply(4:length(allCorpus$documents$name), function(n){
+
+    prediction = predict(model, newdata = trainingset[n])
+    pred_party = prediction$nb.predicted
+    true_party = allCorpus$documents$party[n]
+    return(pred_party == true_party)
+})
+)
+
+success_rate = sum(success) / (length(twCorpus$documents$text) - 30)
+
+## Wrongly classified mps
+dissidents = twCorpus$documents$name[which(success == FALSE)]
+loyalists = twCorpus$documents$name[which(success == TRUE)]
+
+naive = data.frame(account = dissidents, naive_diss = TRUE)
+naive = rbind(naive, data.frame(account = loyalists, naive_diss = FALSE))
+
+cand_data = merge(cand_data, naive, by = "account")
 
 write.csv(cand_data, "tweets/cand_scores.csv", row.names = FALSE)
