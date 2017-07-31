@@ -55,8 +55,23 @@ cand_data = read.csv("tweets/cand_scores.csv", header = TRUE, na.strings=c(""))
 ## --- End ---
 
 ## Select parties
-## ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr" | name == "franceinsoumise")
 ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr")
+## ptwCorpus = corpus_subset(ptwCorpus, name == "partisocialiste" | name == "lesrepublicains" | name == "enmarchefr" | name == "fn_officiel" | name == "franceinsoumise" )
+
+## Indicate party's account as docname
+docnames(ptwCorpus) = paste(docvars(ptwCorpus, "name"))
+
+## Add party as twCorpus' docvar
+cand_party = data.frame(party = cand_data$nuance, row.names = cand_data$account) 
+
+twCorpus = corpus_subset(twCorpus, name %in% as.character(cand_data$account))
+
+twCorpus$documents$party = as.character(cand_party[as.character(twCorpus$documents$name),])
+
+twCorpus = corpus_subset(twCorpus, party %in% c("SOC","REM","LR"))
+
+## Indicate name and party as docname
+docnames(twCorpus) = paste(docvars(twCorpus, "name"), docvars(twCorpus, "party"))
 
 ## Add additional stopwords
 my_stopwords = as.vector(unlist(read.table("stopwords-fr.txt")))
@@ -121,6 +136,18 @@ legend('topright',legend = c("Moyenne","Médiane") , lty=1, col=c("blue", "red")
 
 ## --- Text analysis ---
 
+## --- Compute cosine similarity ---
+simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("partisocialiste", "lesrepublicains","enmarchefr","franceinsoumise","fn_officiel","udi_off","eelv")), margin = "documents", method = "cosine")
+
+## Set minimum value to 0
+simil = pmax(simil, 0)
+
+simil = as.data.frame(simil)[-c(1,2,3,4,5,6,7,244,245),]
+
+simil$account = twCorpus$documents$name
+
+cand_data = merge(cand_data, simil, by = "account")
+
 ## --- Wordscores model ---
 predictWordscores = function(dfm, virgin_docs, ref_scores)
 {
@@ -130,7 +157,7 @@ predictWordscores = function(dfm, virgin_docs, ref_scores)
     return (pred)
 }
 
-## model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91, 1.7))
+## model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 9.64, 5.91, 1.7))
 model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91))
 
 ## Scores predicted by the model
@@ -151,11 +178,14 @@ cand_data = merge(cand_data, mps_scores, by = "account")
 
 ### Graphical representations
 ## Graphical parameters
-parties_colors = data.frame(colors = c("red", "blue", "yellow"), row.names = ptwCorpus$documents$name)
+## parties_colors = data.frame(colors = c("red", "blue", "yellow"), row.names = ptwCorpus$documents$name)
+## parties_colors = data.frame(colors = c("red", "blue", "black","yellow","indianred"), row.names = ptwCorpus$documents$name)
+parties_colors = data.frame(colors = c("red", "blue","yellow"), row.names = ptwCorpus$documents$name)
 
-cand_colors = data.frame(colors = c("blue", "red", rep("gray",4), "yellow", rep("gray", 6)), row.names = unique(cand_data$nuance)) 
+## cand_colors = data.frame(colors = c("blue", "red", rep("gray",4), "yellow", rep("gray", 6)), row.names = unique(cand_data$nuance)) 
+cand_colors = data.frame(colors = c("red", "yellow", "blue"), row.names = unique(twCorpus$documents$party)) 
 
-colors = as.character(cand_colors[as.character(cand_data$nuance),])
+colors = as.character(cand_colors[as.character(twCorpus$documents$party),])
 
 ## Resolution options for plot
 width = 1300 * 0.7
@@ -165,16 +195,16 @@ ratio = dpi / 72
 
 ### Plot
 ## y-axis
-len = length(cand_data$wordscores[cand_data$wordscores>0])
+len = length(mps_scores$wordscores)
 
 ## Labels
-labels = cand_data$account[cand_data$wordscores>0]
+labels = twCorpus$documents$name
 
 ## Save plot as png
 png("Graphs/Plot_wordscores_french_cand.png", width=width * ratio, height=height * ratio, res=dpi)
-x = cand_data$wordscores[cand_data$wordscores>0]
-plot(x=x, y=1:len, xlim=c(min(parties_scores,x), max(parties_scores,x)), xlab="Scores sur une échelle gauche-droite", ylab="Index des comptes", col=colors[cand_data$wordscores>0], main="Positionnement des candidats par rapport aux comptes des partis (LR, PS, REM)", cex.main=1.5, pch=1, cex=0)
-text(x=x, y=1:length(labels), labels=labels, cex=0.5, col=colors[cand_data$wordscores>0])
+x = mps_scores$wordscores
+plot(x=x, y=1:len, xlim=c(min(parties_scores,x), max(parties_scores,x)), xlab="Scores sur une échelle gauche-droite", ylab="Index des comptes", col=colors, main="Positionnement des candidats par rapport aux comptes des partis (LR, PS, REM)", cex.main=1.5, pch=1, cex=0)
+text(x=x, y=1:length(labels), labels=labels, cex=0.5, col=colors)
 abline(v=parties_scores, col=as.character(parties_colors[ptwCorpus$documents$name,]))
 legend(x=6.4, y=30, unique(ptwCorpus$documents$name), fill=as.character(parties_colors[ptwCorpus$documents$name,]), cex=0.8)
 dev.off()
@@ -191,5 +221,16 @@ lapply(1:length(pnames), function(n) {
     abline(v=parties_scores[n], col=as.character(as.data.frame(parties_colors)$colors[n]))
 })
 dev.off()
+
+## --- Wordfish model ---
+twCorpus = corpus_subset(twCorpus, party %in% c("SOC","LR")
+ptwCorpus = corpus_subset(ptwCorpus, name %in% c("partisocialiste", "lesrepublicains"))
+allCorpus = twCorpus + ptwCorpus
+alldfm = to_dfm(allCorpus)
+alldfm = dfm_wordstem(alldfm, language = "french")
+
+wfm1 = textmodel_wordfish(alldfm, dir = c(120,121))
+
+textplot_scale1d(wfm1)
 
 write.csv(cand_data, "tweets/cand_scores.csv", row.names = FALSE)
