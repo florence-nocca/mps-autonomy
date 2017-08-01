@@ -19,12 +19,12 @@ library(ape) # For dendrogram
 options(scipen=999)
 
 ## Load corpuses
-load("tweets/corpus.Rdata")
+load("data/corpus.Rdata")
 
 ## ## --- First execution only ---
 ## ## --- Retrieving candidates social and political characteristics ---
 ## require(readstata13)
-## data = read.dta13("tweets/french_cand_data.dta")
+## data = read.dta13("data/french_cand_data.dta")
 ## colnames(data) = tolower(colnames(data))
 
 ## ## Correct wrongly assigned account
@@ -51,7 +51,7 @@ load("tweets/corpus.Rdata")
 
 ## --- Not first execution ---
 ## Read database on mps, making sure that the parameter na.strings is equal to c("") so that each missing value is coded as a NA
-cand_data = read.csv("tweets/cand_scores.csv", header = TRUE, na.strings=c(""))
+cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
 ## --- End ---
 
 ## Indicate party's account as docname
@@ -346,7 +346,7 @@ svm = rbind(svm, data.frame(account = svm_loyalists, svm_diss = FALSE))
 
 cand_data = merge(cand_data, svm, by = "account")
 
-write.csv(cand_data, "tweets/cand_scores.csv", row.names = FALSE)
+write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 
 ## Novelty detection
 library(caret)

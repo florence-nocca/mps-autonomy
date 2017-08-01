@@ -16,8 +16,8 @@ library(stringi)
 options(scipen=999)
 
 ## --- Preparing text for analysis ---
-cand_tweets = readtext("tweets/cand_campaign_tweets.csv", textfield = "text")
-parties_tweets = readtext("tweets/parties_campaign_tweets.csv", textfield = "text")
+cand_tweets = readtext("data/cand_campaign_tweets.csv", textfield = "text")
+parties_tweets = readtext("data/parties_campaign_tweets.csv", textfield = "text")
 
 ## Create a quanteda corpus
 twCorpus = corpus(cand_tweets)
@@ -108,4 +108,4 @@ kwic_hamon = kwic(tolower(twCorpus$documents$text), "hamon", window = 3)
 kwic_marché = rbind(kwic(tolower(twCorpus$documents$text), "marche", window = 3),View(kwic(tolower(ptwCorpus$documents$text), "marche", window = 3))
 
 ## Save corpuses as R objects
-save(twCorpus, ptwCorpus, file = "tweets/corpus.Rdata")
+save(twCorpus, ptwCorpus, file = "data/corpus.Rdata")

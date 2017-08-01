@@ -14,8 +14,8 @@ library(stringr)
 ## Use exact values instead of scientific notations
 options(scipen=999)
 
-tweets = readtext("tweets/all_french_cand.tweets.csv", textfield = "text")
-ptweets = readtext("tweets/all_french_parties.tweets.csv", textfield = "text")
+tweets = readtext("data/all_french_cand.tweets.csv", textfield = "text")
+ptweets = readtext("data/all_french_parties.tweets.csv", textfield = "text")
 
 ## Countries in the dataset
 unique(tweets$country)
@@ -89,5 +89,5 @@ cand_tweets = sort_by_author(campaign_tweets)
 parties_tweets = sort_by_author(campaign_ptweets)
 
 ## Write result as csv
-write.csv(cand_tweets, "tweets/cand_campaign_tweets.csv")
-write.csv(parties_tweets, "tweets/parties_campaign_tweets.csv")
+write.csv(cand_tweets, "data/cand_campaign_tweets.csv")
+write.csv(parties_tweets, "data/parties_campaign_tweets.csv")

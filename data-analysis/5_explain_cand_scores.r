@@ -16,7 +16,7 @@ library(corrplot)
 options(scipen=999)
 
 ## Read candidates data
-cand_data = read.csv("tweets/cand_scores.csv", header = TRUE, na.strings=c(""))
+cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
 
 
 ## Round wordscores value
