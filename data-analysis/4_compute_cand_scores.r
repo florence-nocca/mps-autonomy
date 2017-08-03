@@ -5,15 +5,9 @@ rm(list = ls(all = TRUE))
 
 library(quanteda)
 library(readtext)
-library(topicmodels)
-library(tidyr)
-library(dplyr)
-library(multidplyr)
-library(purrr)
-library(stringr)
 library(stringi)
-library(graphics) # For dendrogram
-library(ape) # For dendrogram
+## library(graphics) # For dendrogram
+## library(ape) # For dendrogram
 
 ## Use exact values instead of scientific notations
 options(scipen=999)
@@ -70,7 +64,7 @@ twCorpus = corpus_subset(twCorpus, name %in% as.character(cand_data$account))
 
 twCorpus$documents$party = as.character(cand_party[as.character(twCorpus$documents$name),])
 
-twCorpus = corpus_subset(twCorpus, party %in% c("SOC","REM","LR"))
+## twCorpus = corpus_subset(twCorpus, party %in% c("SOC","REM","LR"))
 
 ## Indicate name and party as docname
 docnames(twCorpus) = paste(docvars(twCorpus, "name"), docvars(twCorpus, "party"))
@@ -137,19 +131,6 @@ abline(v=median(tokenInfo$Tokens), col = "red")
 legend('topright',legend = c("Moyenne","Médiane") , lty=1, col=c("blue", "red"), bty='n', cex=.75)
 
 ## --- Text analysis ---
-
-## --- Compute cosine similarity ---
-simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("partisocialiste", "lesrepublicains","enmarchefr","franceinsoumise","fn_officiel","udi_off","eelv")), margin = "documents", method = "cosine")
-
-## Set minimum value to 0
-simil = pmax(simil, 0)
-
-simil = as.data.frame(simil)[-c(1,2,3,4,5,6,7,244,245),]
-
-simil$account = twCorpus$documents$name
-
-cand_data = merge(cand_data, simil, by = "account")
-
 ## --- Wordscores model ---
 predictWordscores = function(dfm, virgin_docs, ref_scores)
 {
@@ -225,7 +206,6 @@ lapply(1:length(pnames), function(n) {
 dev.off()
 
 ## --- Wordfish model ---
-
 predictWordfish = function(twCorpus, ptwCorpus, cand_party, parties_to_keep)
 {
 
@@ -244,10 +224,75 @@ predictWordfish = function(twCorpus, ptwCorpus, cand_party, parties_to_keep)
 wfm = predictWordfish(twCorpus, ptwCorpus, c("REM","SOC"), c("enmarchefr", "partisocialiste"))
 textplot_scale1d(wfm)
 
+## ------ Machine Learning ------
+
+## --- Compute cosine similarity ---
+## simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("partisocialiste", "lesrepublicains","enmarchefr","franceinsoumise","fn_officiel","udi_off","eelv")), margin = "documents", method = "cosine")
+simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("partisocialiste", "lesrepublicains","enmarchefr")), margin = "documents", method = "cosine")
+
+## Set minimum value to 0
+simil = pmax(simil, 0)
+
+## simil = as.data.frame(simil)[-c(1,2,3),]
+simil = as.data.frame(simil)
+
+simil$account = allCorpus$documents$name
+
+cand_data = merge(cand_data, simil, by = "account")
+
+## cand_data = subset(cand_data, select = -(73:76))
+
+## --- k-means --- 
+simil = subset(simil, select = -account)
+
+k = 4
+
+km_simil = kmeans(simil, k, algorithm = "Hartigan-Wong", nstart=100, iter.max = 100)
+
+## Find each party's class number looking at centers
+km_simil$centers
+
+classes = lapply(1:k, function(n){
+    unique(twCorpus$documents[km_simil$cluster == n,]$name)
+})
+
+## Look at class composition
+n = 2
+table(cand_data[cand_data$account %in% classes[[n]],]$nuance)
+## k = 3 with tweets' content does not find the 3 parties, but k = 4 does, with a fourth "unclassable" class
+
+## Create empty data frame
+km_on_simil = data.frame(account = character(), class_simil = numeric(), stringsAsFactors = FALSE)
+
+## Append data frame with accounts and their corresponding class
+for(i in 1:k){
+    km_on_simil = rbind(km_on_simil, data.frame(account = tolower(classes[[i]]), km_simil = rep(i, length(classes[[i]]))))
+}
+
+cand_data = merge(cand_data, km_on_simil, by = "account")
+
+## km_on_simil$km_simil = pred_party
+
+parties_classes = data.frame(party = c("SOC","NA","LR","REM"), row.names = c(1, 2,3,4))
+
+pred_party = as.character(parties_classes[cand_data$km_simil,])
+
+## cand_data$km_simil = (pred_party != cand_data$nuance)
+
+cand_data$km_pred = pred_party
+cand_data = subset(cand_data, select = -km_simil)
+
 ## --- Naive Bayesian ---
-trainingset = dfm_subset(alldfm, docset == 1)
+
+## First run: party document as training data
+## trainingset = dfm_subset(alldfm, docset == 1)
+## predictionset = dfm_subset(alldfm, docset == 2)
+## trainingclass = factor(allCorpus$documents$party[1:3])
+
+## Other runs: parties and "alwaysloyalists" as training data
+trainingset = dfm_subset(alldfm, name %in% c(always_loyalists,ptwCorpus$documents$name))
 predictionset = dfm_subset(alldfm, docset == 2)
-trainingclass = factor(allCorpus$documents$party[1:3])
+trainingclass = factor(allCorpus$documents[allCorpus$documents$name %in% c(always_loyalists,ptwCorpus$documents$name),]$party)
 
 model = textmodel_NB(trainingset, trainingclass)
 
@@ -257,24 +302,39 @@ success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
     prediction = predict(model, newdata = predictionset[n])
     pred_party = prediction$nb.predicted
     true_party = twCorpus$documents$party[n]
-    return(pred_party == true_party)
+    ## return(pred_party == true_party)
+    return(pred_party)
 })
 )
-
-success_rate = sum(success) / length(twCorpus$documents$text)
+naive_pred = success
+## success_rate = sum(success) / length(twCorpus$documents$text)
+## success rate of 79\% on first run
+## 85\% vith always_loyalists as training data
 
 ## Wrongly classified mps
 naive_dissidents = twCorpus$documents$name[which(success == FALSE)]
 naive_loyalists = twCorpus$documents$name[which(success == TRUE)]
 
-## Remove previously computed naive
-cand_data = subset(cand_data, select = -naive_diss)
+## Party predicted
+naive_lr = twCorpus$documents$name[which(naive_pred == "LR")]
+naive_soc = twCorpus$documents$name[which(naive_pred == "SOC")]
+naive_rem = twCorpus$documents$name[which(naive_pred == "REM")]
 
 ## Merge by account names
-naive = data.frame(account = naive_dissidents, naive_diss = TRUE)
-naive = rbind(naive, data.frame(account = naive_loyalists, naive_diss = FALSE))
+naive_party_pred = data.frame(account = naive_lr, naive_pred_bis = "LR")
+naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_soc, naive_pred_bis = "SOC"))
+naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_rem, naive_pred_bis = "REM"))
 
-cand_data = merge(cand_data, naive, by = "account")
+cand_data = merge(cand_data, naive_party_pred, by = "account")
+
+## Remove previously computed naive
+## cand_data = subset(cand_data, select = -naive_diss)
+
+## Merge by account names
+## naive = data.frame(account = naive_dissidents, naive_diss = TRUE)
+## naive = rbind(naive, data.frame(account = naive_loyalists, naive_diss = FALSE))
+
+## cand_data = merge(cand_data, naive, by = "account")
 
 ## --- Wordshoal ---
 wordshoalfit = textmodel_wordshoal(alldfm, dir = c(1,2),
@@ -295,28 +355,6 @@ hist(as.numeric(fitdf[fitdf$party == party,]$theta), main = party)
 }
 )
 
-## --- KNN ---
-
-## With euclidian distance
-library(class)
-
-pred = knn(trainingset,predictionset,trainingclass,3)
-
-success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
-
-    pred_party = pred[n]
-    true_party = twCorpus$documents$party[n]
-    return(pred_party == true_party)
-    
-})
-)
-
-success_rate = sum(success) / length(twCorpus$documents$text)
-
-## Wrongly classified mps
-knn_dissidents = twCorpus$documents$name[which(success == FALSE)]
-knn_loyalists = twCorpus$documents$name[which(success == TRUE)]
-
 ## --- SVM ---
 library(e1071)
 
@@ -324,62 +362,102 @@ model = svm(trainingset,trainingclass, kernel = "sigmoid")
 pred = predict(model, predictionset)
 pred = as.character(pred)
 table(pred, twCorpus$documents$party)
-## Best so far (success rate of 78\%)
+## First run: success rate of 78\%)
+# Following runs: 85\%
+
+success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
+
+    pred_party = pred[n]
+    true_party = twCorpus$documents$party[n]
+    return(pred_party == true_party)    
+})
+)
+success_rate = sum(success) / length(twCorpus$documents$text)
+
+## Party predicted
+svm_lr = twCorpus$documents$name[which(pred == "LR")]
+svm_soc = twCorpus$documents$name[which(pred == "SOC")]
+svm_rem = twCorpus$documents$name[which(pred == "REM")]
+
+## Merge by account names
+svm_party_pred = data.frame(account = svm_lr, svm_pred_bis = "LR")
+svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_soc, svm_pred_bis = "SOC"))
+svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_rem, svm_pred_bis = "REM"))
+
+cand_data = merge(cand_data, svm_party_pred, by = "account")
+
+## success_rate = sum(success) / length(twCorpus$documents$text)
+
+## svm_dissidents = twCorpus$documents$name[which(success == FALSE)]
+## svm_loyalists = twCorpus$documents$name[which(success == TRUE)]
+
+## ## Merge by account names
+## svm = data.frame(account = svm_dissidents, svm_diss = TRUE)
+## svm = rbind(svm, data.frame(account = svm_loyalists, svm_diss = FALSE))
+## cand_data = merge(cand_data, svm, by = "account")
+
+## Rerun models with loyalists as training data
+svm_loyalists = cand_data[cand_data$nuance == cand_data$svm_pred,]$account
+naive_loyalists = cand_data[cand_data$nuance == cand_data$naive_pred,]$account
+
+
+km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
+km_loyalists = cand_data[cand_data$nuance == km_pred,]$account
+
+
+always_loyalists = Reduce(intersect, list(svm_loyalists,naive_loyalists,km_loyalists))
+
+## mps_predicted = simil[!(simil$account %in% c(always_loyalists,ptwCorpus$documents$name)),]$account
+
+## --- KNN ---
+library(class)
+
+## KNN on cosine similarity does not work well (62\%)
+## train_seq = which(simil$account %in% always_loyalists)
+## test_seq = 4:length(simil$account)
+
+## train = simil[c(1:3,train_seq),1:3]
+## labels = allCorpus$documents[c(1:3,train_seq),]$party
+## test = simil[test_seq,1:3]
+
+## pred = knn(train,test,labels,3)
+
+## KNN on dfm is better (79\%, but still less than other models with always_loyalists training data) 
+pred = knn(trainingset,predictionset,trainingclass,3)
 
 success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
 
     pred_party = pred[n]
     true_party = twCorpus$documents$party[n]
     return(pred_party == true_party)
-    
+    ## return(pred_party)    
 })
 )
-
 success_rate = sum(success) / length(twCorpus$documents$text)
 
-svm_dissidents = twCorpus$documents$name[which(success == FALSE)]
-svm_loyalists = twCorpus$documents$name[which(success == TRUE)]
+knn_lr = twCorpus$documents$name[which(pred == "LR")]
+knn_soc = twCorpus$documents$name[which(pred == "SOC")]
+knn_rem = twCorpus$documents$name[which(pred == "REM")]
 
 ## Merge by account names
-svm = data.frame(account = svm_dissidents, svm_diss = TRUE)
-svm = rbind(svm, data.frame(account = svm_loyalists, svm_diss = FALSE))
+knn_party_pred = data.frame(account = knn_lr, knn_pred_bis = "LR")
+knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_soc, knn_pred_bis = "SOC"))
+knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_rem, knn_pred_bis = "REM"))
 
-cand_data = merge(cand_data, svm, by = "account")
+cand_data = merge(cand_data, knn_party_pred, by = "account")
 
+## Write changes to cand_scores file
 write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 
-## Novelty detection
-library(caret)
+## Detect systematic dissidents
+svm_dissidents = cand_data[cand_data$nuance != cand_data$svm_pred,]$account
+naive_dissidents = cand_data[cand_data$nuance != cand_data$naive_pred,]$account
 
-noveltyDetect = function(nuance, p = 0.6, nu = 0.1, kernel  = "sigmoid")
-{
-    trainPositive = dfm_subset(alldfm, party == nuance)
-testNegative = dfm_subset(alldfm, party != nuance)
+cand_data$km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
+km_dissidents = cand_data[as.character(cand_data$nuance) != km_pred,]$account
 
-inTrain = createDataPartition(1:nrow(trainPositive),p = p,list=FALSE)
+svm_bis_dissidents = cand_data[as.character(cand_data$nuance) != as.character(cand_data$svm_pred_bis),]$account
 
-trainpredictors = dfm_subset(trainPositive, inTrain)
-trainLabels = rep(TRUE, ndoc(trainpredictors))
+naive_bis_dissidents = cand_data[as.character(cand_data$nuance) != as.character(cand_data$naive_pred_bis),]$account
 
-testPositive = dfm_subset(trainPositive, c(1:nrow(trainPositive))[-inTrain])
-testPosNeg = rbind(testPositive,testNegative)
-
-testpredictors = testPosNeg
-testLabels = rep(nuance, length(allCorpus$documents[docnames(testPosNeg),]$party)) == allCorpus$documents[docnames(testPosNeg),]$party
-
-svm.model = svm(trainingPositive,y=NULL,
-               type='one-classification',
-               nu=nu,
-               scale=TRUE,
-               kernel= kernel)
-
-svm.predtrain = predict(svm.model,trainpredictors)
-svm.predtest = predict(svm.model,testpredictors)
-
-print(table(Predicted=svm.predtrain,Reference=trainLabels))
-print(table(Predicted=svm.predtest,Reference=testLabels))
-}
-
-soc = noveltyDetect("SOC")
-rem = noveltyDetect("REM")
-lr = noveltyDetect("LR")
+knn_bis_dissidents = cand_data[as.character(cand_data$nuance) != as.character(cand_data$knn_pred_bis),]$account
