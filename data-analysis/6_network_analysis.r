@@ -61,3 +61,55 @@ options(scipen=999)
 
 ## Load corpuses
 load("data/net_corpus.Rdata")
+
+parties_colors = data.frame(colors = c("red", "blue",rep("gray",3),"yellow",rep("gray",3)), row.names = ptwCorpus$documents$party)
+
+df = lapply(1:length(twCorpus$documents$name), function(n){
+mp_dfm = to_dfm(twCorpus$documents$texts[n])
+dest = as.character(names(topfeatures(mp_dfm, length(mp_dfm))))
+weight = as.integer(topfeatures(mp_dfm, length(mp_dfm)))
+orig = rep(as.character(twCorpus$documents$name[n]), length(dest))
+df = data.frame(orig = orig, dest = dest, weight = weight)
+}
+)
+
+df = reshape::merge_all(df)
+
+df = df[order(-df$weight),]
+
+df_save = df
+
+## Minimum weight for the relation to be drawn
+min = 30
+df = df_save[df_save$weight >= min,]
+
+## Accounts mentioned in the graph
+accounts = data.frame(names = unique(c(as.character(df$dest),as.character(df$orig))), col = rep("gray",length(names)))
+
+accounts$col = unlist(lapply(accounts$names, function(n)
+{
+
+    if(n %in% twCorpus$documents$name)
+    {
+        party = twCorpus$documents[twCorpus$documents$name == n,]$party
+
+        col = as.character(parties_colors[party,])
+    }
+    else
+        col = "gray"
+}
+))
+
+write(paste("digraph g {\n",
+                paste(as.character(df$orig),
+                      "->",
+                      as.character(df$dest),
+                      collapse = "\n", sep=""),
+                "\n",
+                paste(accounts$names,
+                      "[shape=circle,fontsize=12,color=",accounts$col,",style=filled,label=\"", accounts$names,"\"]",
+                      collapse = "\n", sep=""), "}\n", sep=""),
+          paste("Graphs/rel_graph_min",min,".dot", sep=""))
+
+## Set presidential candidates' shape to "square"
+system(paste("fdp -Tpdf -oGraphs/rel_graph_min",min,".pdf Graphs/rel_graph_min",min,".dot",sep=""))
