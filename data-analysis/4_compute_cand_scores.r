@@ -13,7 +13,8 @@ library(stringi)
 options(scipen=999)
 
 ## Load corpuses
-load("data/corpus.Rdata")
+## load("data/corpus.Rdata")
+load("data/net_corpus.Rdata")
 
 ## ## --- First execution only ---
 ## ## --- Retrieving candidates social and political characteristics ---
@@ -151,10 +152,10 @@ parties_scores = scores[1:ndoc(ptwCorpus)]
 mps_scores = scores[(ndoc(ptwCorpus)+1):length(scores)]
 
 ## Create empty data frame
-mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
+mps_scores = data.frame(account = twCorpus$documents$name, net_wordscores = mps_scores, stringsAsFactors = FALSE)
 
 ## Remove previously computed wordscores
-cand_data = subset(cand_data, select = -wordscores)
+## cand_data = subset(cand_data, select = -wordscores)
 
 ## Merge by account names
 cand_data = merge(cand_data, mps_scores, by = "account")
@@ -233,11 +234,13 @@ simil = as.matrix(textstat_simil(dfm_weight(alldfm, "relFreq"), c("partisocialis
 ## Set minimum value to 0
 simil = pmax(simil, 0)
 
-## simil = as.data.frame(simil)[-c(1,2,3),]
+simil = as.data.frame(simil)[-c(1,2,3),]
 simil = as.data.frame(simil)
 
-simil$account = allCorpus$documents$name
+## colnames(simil) = gsub("^","net_",colnames(simil))
 
+simil$account = twCorpus$documents$name
+    
 cand_data = merge(cand_data, simil, by = "account")
 
 ## cand_data = subset(cand_data, select = -(73:76))
@@ -245,7 +248,7 @@ cand_data = merge(cand_data, simil, by = "account")
 ## --- k-means --- 
 simil = subset(simil, select = -account)
 
-k = 4
+k = 3
 
 km_simil = kmeans(simil, k, algorithm = "Hartigan-Wong", nstart=100, iter.max = 100)
 
@@ -257,30 +260,31 @@ classes = lapply(1:k, function(n){
 })
 
 ## Look at class composition
-n = 2
+n = 1
 table(cand_data[cand_data$account %in% classes[[n]],]$nuance)
 ## k = 3 with tweets' content does not find the 3 parties, but k = 4 does, with a fourth "unclassable" class
 
 ## Create empty data frame
-km_on_simil = data.frame(account = character(), class_simil = numeric(), stringsAsFactors = FALSE)
+km_on_simil = data.frame(account = character(), net_km_simil = numeric(), stringsAsFactors = FALSE)
 
 ## Append data frame with accounts and their corresponding class
 for(i in 1:k){
-    km_on_simil = rbind(km_on_simil, data.frame(account = tolower(classes[[i]]), km_simil = rep(i, length(classes[[i]]))))
+    km_on_simil = rbind(km_on_simil, data.frame(account = tolower(classes[[i]]), net_km_simil = rep(i, length(classes[[i]]))))
 }
 
 cand_data = merge(cand_data, km_on_simil, by = "account")
 
 ## km_on_simil$km_simil = pred_party
 
-parties_classes = data.frame(party = c("SOC","NA","LR","REM"), row.names = c(1, 2,3,4))
+parties_classes = data.frame(party = c("SOC","LR","REM"), row.names = c(1, 2,3))
 
-pred_party = as.character(parties_classes[cand_data$km_simil,])
+pred_party = as.character(parties_classes[cand_data$net_km_simil,])
 
 ## cand_data$km_simil = (pred_party != cand_data$nuance)
 
-cand_data$km_pred = pred_party
-cand_data = subset(cand_data, select = -km_simil)
+cand_data$net_km_pred = pred_party
+
+cand_data = subset(cand_data, select = -net_km_simil)
 
 ## --- Naive Bayesian ---
 
@@ -306,24 +310,21 @@ success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
     return(pred_party)
 })
 )
-naive_pred = success
-## success_rate = sum(success) / length(twCorpus$documents$text)
-## success rate of 79\% on first run
-## 85\% vith always_loyalists as training data
 
-## Wrongly classified mps
-naive_dissidents = twCorpus$documents$name[which(success == FALSE)]
-naive_loyalists = twCorpus$documents$name[which(success == TRUE)]
+net_naive_pred_bis = success
+## success_rate = sum(success) / length(twCorpus$documents$text)
+## success rate of 79\% (92 with networks) on first run
+## 85\% (89 for networks) with always_loyalists as training data
 
 ## Party predicted
-naive_lr = twCorpus$documents$name[which(naive_pred == "LR")]
-naive_soc = twCorpus$documents$name[which(naive_pred == "SOC")]
-naive_rem = twCorpus$documents$name[which(naive_pred == "REM")]
+naive_lr = twCorpus$documents$name[which(net_naive_pred_bis == "LR")]
+naive_soc = twCorpus$documents$name[which(net_naive_pred_bis == "SOC")]
+naive_rem = twCorpus$documents$name[which(net_naive_pred_bis == "REM")]
 
 ## Merge by account names
-naive_party_pred = data.frame(account = naive_lr, naive_pred_bis = "LR")
-naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_soc, naive_pred_bis = "SOC"))
-naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_rem, naive_pred_bis = "REM"))
+naive_party_pred = data.frame(account = naive_lr, net_naive_pred_bis = "LR")
+naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_soc, net_naive_pred_bis = "SOC"))
+naive_party_pred = rbind(naive_party_pred, data.frame(account = naive_rem, net_naive_pred_bis = "REM"))
 
 cand_data = merge(cand_data, naive_party_pred, by = "account")
 
@@ -362,8 +363,8 @@ model = svm(trainingset,trainingclass, kernel = "sigmoid")
 pred = predict(model, predictionset)
 pred = as.character(pred)
 table(pred, twCorpus$documents$party)
-## First run: success rate of 78\%)
-# Following runs: 85\%
+## First run: success rate of 78\% (84 on networks))
+# Following runs: 85\% (59 on networks !)
 
 success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
 
@@ -380,30 +381,17 @@ svm_soc = twCorpus$documents$name[which(pred == "SOC")]
 svm_rem = twCorpus$documents$name[which(pred == "REM")]
 
 ## Merge by account names
-svm_party_pred = data.frame(account = svm_lr, svm_pred_bis = "LR")
-svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_soc, svm_pred_bis = "SOC"))
-svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_rem, svm_pred_bis = "REM"))
+svm_party_pred = data.frame(account = svm_lr, net_svm_pred = "LR")
+svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_soc, net_svm_pred = "SOC"))
+svm_party_pred = rbind(svm_party_pred, data.frame(account = svm_rem, net_svm_pred = "REM"))
 
 cand_data = merge(cand_data, svm_party_pred, by = "account")
 
-## success_rate = sum(success) / length(twCorpus$documents$text)
-
-## svm_dissidents = twCorpus$documents$name[which(success == FALSE)]
-## svm_loyalists = twCorpus$documents$name[which(success == TRUE)]
-
-## ## Merge by account names
-## svm = data.frame(account = svm_dissidents, svm_diss = TRUE)
-## svm = rbind(svm, data.frame(account = svm_loyalists, svm_diss = FALSE))
-## cand_data = merge(cand_data, svm, by = "account")
-
 ## Rerun models with loyalists as training data
-svm_loyalists = cand_data[cand_data$nuance == cand_data$svm_pred,]$account
-naive_loyalists = cand_data[cand_data$nuance == cand_data$naive_pred,]$account
-
-
-km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
-km_loyalists = cand_data[cand_data$nuance == km_pred,]$account
-
+svm_loyalists = cand_data[cand_data$nuance == cand_data$net_svm_pred,]$account
+naive_loyalists = cand_data[cand_data$nuance == cand_data$net_naive_pred,]$account
+## km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
+km_loyalists = cand_data[cand_data$nuance == cand_data$net_km_pred,]$account
 
 always_loyalists = Reduce(intersect, list(svm_loyalists,naive_loyalists,km_loyalists))
 
@@ -422,27 +410,27 @@ library(class)
 
 ## pred = knn(train,test,labels,3)
 
-## KNN on dfm is better (79\%, but still less than other models with always_loyalists training data) 
+## KNN on dfm is better (79\%, but still less than other models with always_loyalists training data) (74 with networks)
 pred = knn(trainingset,predictionset,trainingclass,3)
 
 success = unlist(lapply(1:length(twCorpus$documents$name), function(n){
 
     pred_party = pred[n]
     true_party = twCorpus$documents$party[n]
-    return(pred_party == true_party)
-    ## return(pred_party)    
+    ## return(pred_party == true_party)
+    return(pred_party)    
 })
 )
-success_rate = sum(success) / length(twCorpus$documents$text)
+## success_rate = sum(success) / length(twCorpus$documents$text)
 
 knn_lr = twCorpus$documents$name[which(pred == "LR")]
 knn_soc = twCorpus$documents$name[which(pred == "SOC")]
 knn_rem = twCorpus$documents$name[which(pred == "REM")]
 
 ## Merge by account names
-knn_party_pred = data.frame(account = knn_lr, knn_pred_bis = "LR")
-knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_soc, knn_pred_bis = "SOC"))
-knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_rem, knn_pred_bis = "REM"))
+knn_party_pred = data.frame(account = knn_lr, net_knn_pred_bis = "LR")
+knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_soc, net_knn_pred_bis = "SOC"))
+knn_party_pred = rbind(knn_party_pred, data.frame(account = knn_rem, net_knn_pred_bis = "REM"))
 
 cand_data = merge(cand_data, knn_party_pred, by = "account")
 
@@ -453,8 +441,12 @@ write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 svm_dissidents = cand_data[cand_data$nuance != cand_data$svm_pred,]$account
 naive_dissidents = cand_data[cand_data$nuance != cand_data$naive_pred,]$account
 
-cand_data$km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
-km_dissidents = cand_data[as.character(cand_data$nuance) != km_pred,]$account
+## cand_data$km_pred = gsub("NA",as.character("NA"),cand_data$km_pred)
+km_dissidents = cand_data[as.character(cand_data$nuance) != cand_data$km_pred,]$account
+
+always_dissidents = Reduce(intersect, list(svm_dissidents,naive_dissidents,km_dissidents))
+
+both_dissidents = Reduce(intersect, list(net_always_dissidents,always_dissidents))
 
 svm_bis_dissidents = cand_data[as.character(cand_data$nuance) != as.character(cand_data$svm_pred_bis),]$account
 
