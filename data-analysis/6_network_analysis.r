@@ -62,8 +62,7 @@ options(scipen=999)
 ## Load corpuses
 load("data/net_corpus.Rdata")
 
-parties_colors = data.frame(colors = c("red", "blue",rep("gray",3),"yellow",rep("gray",3)), row.names = ptwCorpus$documents$party)
-
+## Construct a dataframe containing for each candidate the accounts he mentioned and the number of times they are mentioned
 df = lapply(1:length(twCorpus$documents$name), function(n){
 mp_dfm = to_dfm(twCorpus$documents$texts[n])
 dest = as.character(names(topfeatures(mp_dfm, length(mp_dfm))))
@@ -73,10 +72,11 @@ df = data.frame(orig = orig, dest = dest, weight = weight)
 }
 )
 
+## Merge all dataframes created by lapply
 df = reshape::merge_all(df)
 
+## Sort by weight
 df = df[order(-df$weight),]
-
 df_save = df
 
 ## Minimum weight for the relation to be drawn
@@ -85,6 +85,9 @@ df = df_save[df_save$weight >= min,]
 
 ## Accounts mentioned in the graph
 accounts = data.frame(names = unique(c(as.character(df$dest),as.character(df$orig))), col = rep("gray",length(names)))
+
+## Set a color to each account mentioned
+parties_colors = data.frame(colors = c("red", "blue",rep("gray",3),"yellow",rep("gray",3)), row.names = ptwCorpus$documents$party)
 
 accounts$col = unlist(lapply(accounts$names, function(n)
 {
@@ -100,6 +103,7 @@ accounts$col = unlist(lapply(accounts$names, function(n)
 }
 ))
 
+## Write dot file from df
 write(paste("digraph g {\n",
                 paste(as.character(df$orig),
                       "->",
@@ -111,5 +115,7 @@ write(paste("digraph g {\n",
                       collapse = "\n", sep=""), "}\n", sep=""),
           paste("Graphs/rel_graph_min",min,".dot", sep=""))
 
-## Set presidential candidates' shape to "square"
+## Set presidential candidates' shape to "square" before lauching system command
+
+## Generate pdf from dot file
 system(paste("fdp -Tpdf -oGraphs/rel_graph_min",min,".pdf Graphs/rel_graph_min",min,".dot",sep=""))
