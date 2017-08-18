@@ -34,6 +34,7 @@ boxplot(timeline)
 ## Define upper and lower bounds
 first_tweet = as.Date("2017-03-01")
 last_tweet = as.Date("2017-06-18")
+## last_tweet = as.Date("2017-06-11")
 
 ## Subset the sample to keep campaign tweets only
 campaign_subset = function(filename){
@@ -69,6 +70,18 @@ end_date = "2017-04-05 00:00:00"
 
 sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
 sample(sub_tweets$text,15)
+
+## ## Counting tweets per candidates (before June 11th 2017 only)
+## filename = campaign_tweets
+## filename = data.frame(name = tolower(filename$screen_name), text = filename$text)
+## filename = filename %>% group_by(name) %>% collect()
+## table_tweets = table(filename$name)
+## nb_tweets_mp = data.frame(account = names(table_tweets), nb_tweets = as.numeric(table_tweets))
+
+## cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
+## cand_data = merge(cand_data, nb_tweets_mp, by = "account")
+## Write changes to cand_scores file
+## write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 
 ## Creating one-author documents
 sort_by_author = function(filename)
