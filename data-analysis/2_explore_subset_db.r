@@ -20,7 +20,6 @@ ptweets = readtext("data/all_french_parties.tweets.csv", textfield = "text")
 ## Take only hours
 time_tweeted = sub(".* ", "", tweets$created_at)
 hours_tweeted = as.integer(sub(":.*", "", time_tweeted))
-summary(hours_tweeted)
 ## Tweets are mostly published between 5am and 8pm, the majority between 3pm and 8pm
 
 ## Tweets' sources
@@ -48,12 +47,14 @@ nb_source = na.omit(nb_source)
 
 hist(nb_source)
 
+
 ## Countries in the dataset
 unique(tweets$country)
 unique(tweets[tweets$country == "Taiwan",]$screen_name)
 
 ## Language repartition in the dataset
-barplot(table(tweets$lang))
+barplot(table
+(tweets$lang))
 ## Top languages: fr, en, sp (und: undetermined, tweets containing urls or mentions only)
 ## How many tweets not written in French
 length(unique(tweets[tweets$lang != "fr",]$text))
