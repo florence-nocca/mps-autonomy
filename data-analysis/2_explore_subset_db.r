@@ -53,8 +53,7 @@ unique(tweets$country)
 unique(tweets[tweets$country == "Taiwan",]$screen_name)
 
 ## Language repartition in the dataset
-barplot(table
-(tweets$lang))
+barplot(table(tweets$lang))
 ## Top languages: fr, en, sp (und: undetermined, tweets containing urls or mentions only)
 ## How many tweets not written in French
 length(unique(tweets[tweets$lang != "fr",]$text))

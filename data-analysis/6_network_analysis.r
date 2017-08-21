@@ -9,6 +9,7 @@ library(readtext)
 ## Use exact values instead of scientific notations
 options(scipen=999)
 
+## --- Mentions Analysis ---
 ## First run to create network corpuses
 ## ## Load corpuses
 ## load("data/corpus.Rdata")

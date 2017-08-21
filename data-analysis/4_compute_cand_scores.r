@@ -13,8 +13,8 @@ library(stringi)
 options(scipen=999)
 
 ## Load corpuses
-## load("data/corpus.Rdata")
-load("data/net_corpus.Rdata")
+load("data/corpus.Rdata")
+## load("data/net_corpus.Rdata")
 
 ## ## --- First execution only ---
 ## ## --- Retrieving candidates social and political characteristics ---

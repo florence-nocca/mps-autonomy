@@ -89,13 +89,13 @@ ptwCorpus$documents$texts = clean(ptwCorpus$documents$texts)
 ndoc(twCorpus)           
 
 ## How many tokens (total words)
-ntoken(twCorpus)
+summary(ntoken(twCorpus))
 
 ## Arguments to tokenize can be passed 
 ## ntoken(twCorpus, remove_punct = TRUE)
 
 ## How many types (unique words)
-ntype(tolower(twCorpus))
+barplot(ntype(tolower(twCorpus)))
 
 ## Candidates that are to be removed
 ## removed = twCorpus$documents$name[ntype(tolower(twCorpus)) < 50]
