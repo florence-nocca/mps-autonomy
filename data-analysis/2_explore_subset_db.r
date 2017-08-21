@@ -119,7 +119,7 @@ end_date = "2017-06-10 00:00:00"
 sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
 sample(sub_tweets$text,15)
 
-## Counting tweets per candidates (before June 11th 2017 only)
+## Counting tweets per candidates (nb_tweets -> before June 11th 2017 only and nb_tweets_all -> whole period)
 ## filename = campaign_tweets
 ## filename = data.frame(name = tolower(filename$screen_name), text = filename$text)
 ## filename = filename %>% group_by(name) %>% collect()
