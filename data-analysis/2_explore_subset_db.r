@@ -119,17 +119,41 @@ end_date = "2017-06-10 00:00:00"
 sub_tweets = tweets[tweets$created_at >= start_date & tweets$created_at <= end_date,]
 sample(sub_tweets$text,15)
 
-## Counting tweets per candidates (nb_tweets -> before June 11th 2017 only and nb_tweets_all -> whole period)
-## filename = campaign_tweets
-## filename = data.frame(name = tolower(filename$screen_name), text = filename$text)
-## filename = filename %>% group_by(name) %>% collect()
-## table_tweets = table(filename$name)
-## nb_tweets_mp = data.frame(account = names(table_tweets), nb_tweets_all = as.numeric(table_tweets))
 
-## cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
-## cand_data = merge(cand_data, nb_tweets_mp, by = "account")
-## ## Write changes to cand_scores file
-## write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
+## --- Counting tweets per candidates ---
+## (nb_tweets -> before June 11th 2017 only and nb_tweets_all -> whole period)
+filename = campaign_tweets
+filename = data.frame(name = tolower(filename$screen_name), text = filename$text)
+filename = filename %>% group_by(name) %>% collect()
+table_tweets = table(filename$name)
+nb_tweets_mp = data.frame(account = names(table_tweets), nb_tweets_all = as.numeric(table_tweets))
+
+cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
+cand_data = merge(cand_data, nb_tweets_mp, by = "account")
+## Write changes to cand_scores file
+write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
+
+## Plot results
+library(ggplot2)
+library(cowplot) ## To align two plots
+
+pdf("Graphs/Hist_nb_tweets.pdf")
+ggplot(data=cand_data, aes(cand_data$nb_tweets)) + geom_histogram(aes(y =..count..), breaks=seq(0,1400,by=50), col = "white") + labs(x = "Nombre de tweets", y = "Fréquence") + labs(title = "Du 1er mars au 11 juin 2017") + annotate("rect", xmin = 1000, xmax = 1250, ymin = 20, ymax = 25,
+  alpha = 0) + annotate("text", x = 1100, y = 23, colour = "blue", label = paste("μ =",table[4],"\nσ =",round(sd(sorted_tw),1))) + geom_vline(aes(xintercept = mean(sorted_tw)), colour = "red", linetype="dashed")
+dev.off()
+
+pdf("Graphs/Hist_nb_tweets_all.pdf")
+ggplot(data=cand_data, aes(cand_data$nb_tweets_all)) + geom_histogram(aes(y =..count..), breaks=seq(0,1400,by=50), col = "white") + labs(x = "Nombre de tweets", y = "Fréquence") + labs(title = "Du 1er mars au 18 juin 2017")
+dev.off()
+
+## Combining histogram with boxplot
+p1 = ggplot(data=cand_data, aes(cand_data$nb_tweets)) + geom_histogram(aes(y =..count..), breaks=seq(0,1400,by=50), col = "white") + labs(x = "", y = "") + labs(title = "Du 1er mars au 11 juin 2017") + annotate("line", x = 1100:1175, y = 20, colour = "red", linetype = "dashed") + annotate("text", x = 1275, y = 20, label = "Moyenne")
+
+p2 = ggplot(data=cand_data, aes(x = 1, y = cand_data$nb_tweets)) + geom_boxplot() + labs(y = "Nombre de tweets", x = "") + coord_flip() + geom_hline(aes(yintercept = mean(sorted_tw)), colour = "red", linetype="dashed") 
+
+pdf("Graphs/Hist_Boxplot_nb_tweets.pdf")
+plot_grid(p1, p2, labels = c("", ""), align = "v",ncol = 1, rel_heights = c(5,1))
+dev.off()
 
 ## Creating one-author documents
 sort_by_author = function(filename)
