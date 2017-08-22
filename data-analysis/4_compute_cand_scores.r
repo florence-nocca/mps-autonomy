@@ -152,7 +152,7 @@ parties_scores = scores[1:ndoc(ptwCorpus)]
 mps_scores = scores[(ndoc(ptwCorpus)+1):length(scores)]
 
 ## Create empty data frame
-mps_scores = data.frame(account = twCorpus$documents$name, net_wordscores = mps_scores, stringsAsFactors = FALSE)
+mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
 
 ## Remove previously computed wordscores
 ## cand_data = subset(cand_data, select = -wordscores)
@@ -184,18 +184,20 @@ len = length(mps_scores$wordscores)
 ## Labels
 labels = twCorpus$documents$name
 
+## Legend
+pnames = c("SOC","LR","REM")
+
 ## Save plot as png
-png("Graphs/Plot_wordscores_french_cand.png", width=width * ratio, height=height * ratio, res=dpi)
+## png("Graphs/Plot_wordscores_french_cand.png", width=width * ratio, height=height * ratio, res=dpi)
+pdf("Graphs/Plot_wordscores_french_cand.pdf", width=width * ratio, height=height * ratio, res=dpi)
 x = mps_scores$wordscores
-plot(x=x, y=1:len, xlim=c(min(parties_scores,x), max(parties_scores,x)), xlab="Scores sur une échelle gauche-droite", ylab="Index des comptes", col=colors, main="Positionnement des candidats par rapport aux comptes des partis (LR, PS, REM)", cex.main=1.5, pch=1, cex=0)
+plot(x=x, y=1:len, xlim=c(min(parties_scores,x), max(parties_scores,x)), xlab="Scores sur une échelle gauche-droite", ylab="Index des comptes", col=colors, main="", cex.main=1.5, pch=1, cex=0)
 text(x=x, y=1:length(labels), labels=labels, cex=0.5, col=colors)
 abline(v=parties_scores, col=as.character(parties_colors[ptwCorpus$documents$name,]))
-legend(x=6.4, y=30, unique(ptwCorpus$documents$name), fill=as.character(parties_colors[ptwCorpus$documents$name,]), cex=0.8)
+legend(x=6.4, y=30, pnames, fill=as.character(parties_colors[ptwCorpus$documents$name,]), cex=0.8)
 dev.off()
 
 ## Histograms by party
-pnames = c("SOC","LR","REM")
-
 ## Save histograms as pdf
 pdf("Graphs/Hist_wordscores_french_cand.pdf")
 par(mfrow=c(3,1), oma = c(0, 0, 0, 0))
