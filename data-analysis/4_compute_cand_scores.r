@@ -208,6 +208,29 @@ lapply(1:length(pnames), function(n) {
 })
 dev.off()
 
+## NOMINATE and wordscores
+## Add nominatepr
+## require(readstata13)
+## database = read.dta13("data/DonneesRFS.dta")
+## colnames(database) = tolower(colnames(database))
+## to_match = data.frame(account = tolower(cand_data$account))
+## col_matched = data.frame(account = database$compte, nominatepr = database$nominatepr)
+## cand_data = merge(x=cand_data, y=col_matched, by='account')
+## ## Write changes to cand_scores file
+## write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
+
+data = cand_data[is.na(cand_data$nominatepr) == FALSE,]
+x = data$wordscores
+y = data$nominatepr
+z = data$nuance
+Palette = c("blue","yellow","red")
+
+pdf("Graphs/Plot_NOM_wordscores_french_cand.pdf", width=7, height=6)
+ggplot(data, aes(x, y, colour=factor(z), label = data$account)) + 
+    geom_point(## size=3, shape=19
+               ) + labs(x = "Wordscores", y = "Nominate") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + geom_text(x = 6.5, y = 1, label = "LR", colour = "blue", size = 3, vjust = -0.5) + geom_text(x = min(x), y = min(y), label = "SOC", colour = "red", size = 3) + geom_text(x = 5.82, y = 0, label = "REM", colour = "yellow", size = 3, vjust = 2)
+dev.off()
+
 ## --- Wordfish model ---
 predictWordfish = function(twCorpus, ptwCorpus, cand_party, parties_to_keep)
 {
