@@ -6,6 +6,8 @@ rm(list = ls(all = TRUE))
 library(quanteda)
 library(readtext)
 library(stringi)
+library(ggplot2)
+library(cowplot)
 ## library(graphics) # For dendrogram
 ## library(ape) # For dendrogram
 
@@ -46,7 +48,7 @@ load("data/corpus.Rdata")
 
 ## --- Not first execution ---
 ## Read database on mps, making sure that the parameter na.strings is equal to c("") so that each missing value is coded as a NA
-cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings=c(""))
+cand_data = read.csv("data/cand_scores.csv", header = TRUE, na.strings="NA")
 ## --- End ---
 
 ## Indicate party's account as docname
@@ -146,13 +148,16 @@ model_1 = predictWordscores(alldfm, twCorpus, ref_scores = c(3.83, 7.67, 5.91))
 
 ## Scores predicted by the model
 scores = model_1@textscores$textscore_raw
+std_err = model_1@textscores$textscore_raw_se
 
 ## Differentiate scores from mps and parties
 parties_scores = scores[1:ndoc(ptwCorpus)]
 mps_scores = scores[(ndoc(ptwCorpus)+1):length(scores)]
+mps_std_err = std_err[(ndoc(ptwCorpus)+1):length(std_err)]
 
 ## Create empty data frame
-mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
+## mps_scores = data.frame(account = twCorpus$documents$name, wordscores = mps_scores, stringsAsFactors = FALSE)
+mps_scores = data.frame(account = twCorpus$documents$name, ws_se = mps_std_err, stringsAsFactors = FALSE)
 
 ## Remove previously computed wordscores
 ## cand_data = subset(cand_data, select = -wordscores)
@@ -214,22 +219,26 @@ dev.off()
 ## database = read.dta13("data/DonneesRFS.dta")
 ## colnames(database) = tolower(colnames(database))
 ## to_match = data.frame(account = tolower(cand_data$account))
-## col_matched = data.frame(account = database$compte, nominatepr = database$nominatepr)
+## col_matched = data.frame(account = database$compte, nom2d1 = database$nominate_1d, nom2d2 = database$nominate_2d)
 ## cand_data = merge(x=cand_data, y=col_matched, by='account')
 ## ## Write changes to cand_scores file
 ## write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 
-data = cand_data[is.na(cand_data$nominatepr) == FALSE,]
+## Plot NOMINATE and wordscores
+to_be_removed = which(is.na(cand_data$nominatepr))
+data = cand_data[-to_be_removed,]
+
 x = data$wordscores
 y = data$nominatepr
 z = data$nuance
-Palette = c("blue","yellow","red")
+Palette = c("blue","gold1","red")
 
-pdf("Graphs/Plot_NOM_wordscores_french_cand.pdf", width=7, height=6)
-ggplot(data, aes(x, y, colour=factor(z), label = data$account)) + 
+p = ggplot(data, aes(x, y, colour=factor(z), label = data$account)) + 
     geom_point(## size=3, shape=19
-               ) + labs(x = "Wordscores", y = "Nominate") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + geom_text(x = 6.5, y = 1, label = "LR", colour = "blue", size = 3, vjust = -0.5) + geom_text(x = min(x), y = min(y), label = "SOC", colour = "red", size = 3) + geom_text(x = 5.82, y = 0, label = "REM", colour = "yellow", size = 3, vjust = 2)
-dev.off()
+               ) + labs(x = "Wordscores", y = "Nominate") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + geom_text(x = 6.5, y = 1, label = "LR", colour = "blue", size = 3, vjust = 1) + geom_text(x = min(x), y = min(y), label = "SOC", colour = "red", size = 3) + geom_text(x = 5.82, y = 0, label = "REM", colour = "gold", size = 3, vjust = 2) + theme_classic() + theme(legend.key = element_rect(colour = '#bdbdbd', size = 0.6)) + geom_text(aes(label = data$account), hjust = 0, vjust = 0, size = 5)
+
+
+save_plot("Graphs/Plot_NOM_wordscores_french_cand.pdf", p, base_height = 6, base_width = 7) 
 
 ## --- Wordfish model ---
 predictWordfish = function(twCorpus, ptwCorpus, cand_party, parties_to_keep)
