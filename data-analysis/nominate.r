@@ -58,11 +58,13 @@ x = data$nom2d1
 y = data$nom2d2
 data$nuance = as.character(data$nuance)
 data[data$frondeur == 1,]$nuance = gsub("SOC","Frondeur",data[data$frondeur == 1,]$nuance)
+data[data$constructif == 1,]$nuance = gsub("LR","Constructif",data[data$constructif == 1,]$nuance)
 
 z = as.factor(data$nuance)
-Palette = c("black","blue","gold1","red")
+Palette = c("cyan","black","blue","gold1","red")
 
 p = ggplot(data, aes(x, y, colour = factor(z), label = data$account)) + geom_point(size = 1) + labs(x = "Dimension 1", y = "Dimension 2") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + theme_classic()
+
 save_plot("Graphs/Plot_NOM_2d_french_cand.pdf", p, base_height = 6, base_width = 7) 
 
 ## To add labels
