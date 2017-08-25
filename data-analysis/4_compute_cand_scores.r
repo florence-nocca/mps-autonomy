@@ -225,18 +225,24 @@ dev.off()
 ## write.csv(cand_data, "data/cand_scores.csv", row.names = FALSE)
 
 ## Plot NOMINATE and wordscores
-to_be_removed = which(is.na(cand_data$nominatepr))
+to_be_removed = which(is.na(cand_data$nom2d1))
 data = cand_data[-to_be_removed,]
 
 x = data$wordscores
-y = data$nominatepr
-z = data$nuance
-Palette = c("blue","gold1","red")
+y = data$nom2d1
+
+data$nuance = as.character(data$nuance)
+data[data$frondeur == 1,]$nuance = gsub("SOC","Frondeur",data[data$frondeur == 1,]$nuance)
+
+z = as.factor(data$nuance)
+Palette = c("black","blue","gold1","red")
 
 p = ggplot(data, aes(x, y, colour=factor(z), label = data$account)) + 
     geom_point(## size=3, shape=19
-               ) + labs(x = "Wordscores", y = "Nominate") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + geom_text(x = 6.5, y = 1, label = "LR", colour = "blue", size = 3, vjust = 1) + geom_text(x = min(x), y = min(y), label = "SOC", colour = "red", size = 3) + geom_text(x = 5.82, y = 0, label = "REM", colour = "gold", size = 3, vjust = 2) + theme_classic() + theme(legend.key = element_rect(colour = '#bdbdbd', size = 0.6)) + geom_text(aes(label = data$account), hjust = 0, vjust = 0, size = 5)
+    ) + labs(x = "Wordscores", y = "Nominate (dimension 1)") +  scale_colour_manual(values=Palette) + labs(colour='Parti') + geom_text(x = 6.5, y = 1, label = "LR", colour = "blue", size = 3, vjust = 1) + geom_text(x = min(x), y = min(y), label = "SOC", colour = "red", size = 3) + geom_text(x = 5.82, y = 0, label = "REM", colour = "gold", size = 3, vjust = 2) + theme_classic() + theme(legend.key = element_rect(colour = '#bdbdbd', size = 0.6))
 
+## To add labels
+## + geom_text(aes(label = data$account), hjust = 0, vjust = 0, size = 5)
 
 save_plot("Graphs/Plot_NOM_wordscores_french_cand.pdf", p, base_height = 6, base_width = 7) 
 
