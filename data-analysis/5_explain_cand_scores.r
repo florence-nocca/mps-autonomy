@@ -103,3 +103,7 @@ exp(coef(mod))
 library(stargazer)
 stargazer(mod, title="Regression", align=TRUE)
 
+lm = lm(ws_se ~ nb_tweets, data = cand_data)
+lm_all = lm(ws_se ~ nb_tweets_all, data = cand_data)
+
+stargazer(lm_all)
