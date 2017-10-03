@@ -4,19 +4,19 @@ setwd("~/retrieve-tweets")
 
 library("rtweet")
 library(RCurl)
- 
+
 ## Use exact value instead of scientific notation
 options(scipen=999)
 
 ## Specify users' lists
-user_lists = c("french_parties","french_cand","spanish_mps","spanish_parties","italian_mps","italian_parties")
+user_lists = c("italian_mps","italian_parties","spanish_mps","spanish_parties","british_mps","british_parties","french_mps","french_parties","canadian_mps","canadian_parties")
 
 rate = 0
 lapply(user_lists, function(filename) {
 
     user_list = read.csv(file=paste0("datafiles/",filename,"_accounts.csv"),header=F)
     colnames(user_list) = c("name","account")
-    Sys.sleep(sample(200, 1, replace=F))
+    Sys.sleep(sample(500, 1, replace=F))
 
     ## Inside each list, retrieve each account
     counter = 0
@@ -24,19 +24,20 @@ lapply(user_lists, function(filename) {
         i = 0
         error = 0
         rate = rate + 1
-        ## Every 200 accounts, sleep to avoid rate limit
-        if(rate == 200)
+        ## Every 50 accounts, sleep to avoid rate limit
+        if(rate == 50)
             {
-                Sys.sleep(sample(800:900, 1, replace=F))
+                Sys.sleep(sample(700:800, 1, replace=F))
                 rate = 0
             }
         x = as.character(x)
         print(x)
 
-        ## Return if account does not exist
+        ## Return if account does not exist and write it in a file
         if(url.exists(paste0("https://twitter.com/",x)) == FALSE)
         {
             print("Does not exist")
+            write(x, file = "datafiles/deleted_accounts", append = TRUE)
             return
         }
         else
@@ -75,7 +76,7 @@ lapply(user_lists, function(filename) {
 
                     ## If last_id is null, retrieve 200 last tweets
                     if(is.na(last_id))
-                        to_write = get_timeline(x)
+                        to_write = get_timeline(x, n = 200)
                     else
                     {
                         max_id = NULL
@@ -83,6 +84,12 @@ lapply(user_lists, function(filename) {
 
                         ## Retrieve user's 200 last tweets and repeat until the list contains last_id
                         repeat{
+                          if(is.null(max_id) == FALSE && url.exists(paste0("https://twitter.com/",x,"/status/",max_id)) == FALSE)
+                          {
+                            print(paste0("Max_id's tweet was deleted for ",x))
+                            error = 1
+                            break
+                          }
                             last_page = get_timeline(x, max_id=max_id)
                             if(is.null(pages))
                                 pages = last_page
@@ -125,7 +132,7 @@ lapply(user_lists, function(filename) {
                 else
                 {
                     print(paste0("First retrieve for ",x))
-                    to_write = get_timeline(x)
+                    to_write = get_timeline(x, n = 200)
                 }
 
                 ## Write new tweets in a temporary csv
